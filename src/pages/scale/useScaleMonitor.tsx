@@ -20,6 +20,7 @@ const KEEPALIVE_INTERVAL_MS = 20_000;
 const HISTORY_LIMIT = 200;
 const LOG_LIMIT = 500;
 const CMD_HISTORY_LIMIT = 100;
+const CONTINUOUS_INTERVAL_MS = 1000;
 
 export type LogEntry = {
   ts: number;
@@ -78,7 +79,15 @@ export function useScaleMonitor(): ScaleMonitorApi {
   const reconnectTimer = React.useRef<number | null>(null);
   const manualDisconnect = React.useRef(false);
   const keepaliveTimer = React.useRef<number | null>(null);
-  const continuousTimer = React.useRef<number | null>(null);
+
+  // Continuous control uses a running flag and a timeout id so we avoid overlapping calls.
+  const continuousControl = React.useRef<{
+    running: boolean;
+    timeoutId: number | null;
+  }>({ running: false, timeoutId: null });
+
+  // keep a ref to the latest sendCommand so the loop always calls the current implementation
+  const sendCommandRef = React.useRef<(cmd: string) => Promise<void>>(async () => {});
 
   const [wsUrl, setWsUrlState] = React.useState<string>(() => {
     try {
@@ -146,11 +155,12 @@ export function useScaleMonitor(): ScaleMonitorApi {
     }
   };
 
-  const clearContinuousTimer = () => {
-    if (continuousTimer.current) {
-      window.clearInterval(continuousTimer.current);
-      continuousTimer.current = null;
+  const clearContinuousLoop = () => {
+    if (continuousControl.current.timeoutId !== null) {
+      window.clearTimeout(continuousControl.current.timeoutId);
+      continuousControl.current.timeoutId = null;
     }
+    continuousControl.current.running = false;
     setContinuousActive(false);
   };
 
@@ -209,8 +219,6 @@ export function useScaleMonitor(): ScaleMonitorApi {
     if (!s) return null;
     const str = String(s);
 
-    // Regex to capture a numeric token possibly with a sign (allowing whitespace after sign),
-    // and an optional unit immediately after.
     const tokenRe = /([+-]?\s*\d+(?:[.,]\d+)?)(?:\s*(kg|g|lb|lbs|oz))?/gi;
 
     let match: RegExpExecArray | null;
@@ -228,10 +236,8 @@ export function useScaleMonitor(): ScaleMonitorApi {
       }
     }
 
-    // 1) If we found any token with explicit unit, prefer the one that appears latest (in case multiple)
     if (withUnitTokens.length > 0) {
       const chosen = withUnitTokens[withUnitTokens.length - 1];
-      // remove internal spaces so "- 23" becomes "-23"
       const cleaned = chosen.raw.replace(/\s+/g, "");
       const num = parseFloat(cleaned.replace(",", "."));
       if (isNaN(num)) return null;
@@ -244,7 +250,6 @@ export function useScaleMonitor(): ScaleMonitorApi {
       return { num: finalNum, unit: unitFound };
     }
 
-    // 2) Try to find a number that occurs after a colon ":" (common format "81050026: 55 kg G" or "81050026:- 23 kg G")
     const colonRe = /:\s*([+-]?)\s*([0-9]+(?:[.,][0-9]+)?)/;
     const colonMatch = str.match(colonRe);
     if (colonMatch && colonMatch[2]) {
@@ -253,9 +258,7 @@ export function useScaleMonitor(): ScaleMonitorApi {
       const rawNum = `${signPart}${numPart}`.replace(",", ".");
       const num = parseFloat(rawNum);
       if (!isNaN(num)) {
-        // attempt to find unit after the number (small window)
         const colonIndex = colonMatch.index ?? str.indexOf(":");
-        // search for unit after the colon occurrence:
         const afterStr = str.slice(colonIndex + 1, colonIndex + 1 + 40);
         const unitMatch = afterStr.match(/\b(kg|g|lb|lbs|oz)\b/i);
         let unitFound = unitMatch ? unitMatch[1].toLowerCase() : "kg";
@@ -268,13 +271,11 @@ export function useScaleMonitor(): ScaleMonitorApi {
       }
     }
 
-    // 3) Fallback: pick the last numeric token we found (ignores early register prefix)
     if (numericTokens.length > 0) {
       const last = numericTokens[numericTokens.length - 1];
       const cleaned = last.raw.replace(/\s+/g, "");
       const num = parseFloat(cleaned.replace(",", "."));
       if (isNaN(num)) return null;
-      // no explicit unit found; default to kg
       return { num, unit: "kg" };
     }
 
@@ -331,7 +332,7 @@ export function useScaleMonitor(): ScaleMonitorApi {
         setConnected(false);
         setStatus("disconnected");
         stopKeepalive();
-        clearContinuousTimer();
+        clearContinuousLoop();
         addLog("warn", "Połączenie WebSocket zamknięte");
         if (!manualDisconnect.current) {
           showError("Połączenie WebSocket zamknięte — spróbuję ponownie");
@@ -367,7 +368,7 @@ export function useScaleMonitor(): ScaleMonitorApi {
     }
     clearReconnectTimer();
     stopKeepalive();
-    clearContinuousTimer();
+    clearContinuousLoop();
     setConnected(false);
     if (manual) showError("Rozłączono ręcznie");
   };
@@ -479,21 +480,45 @@ export function useScaleMonitor(): ScaleMonitorApi {
     }
   };
 
-  // Continuous read control exposed on the hook
+  // keep sendCommandRef up to date so continuous loop calls latest
+  React.useEffect(() => {
+    sendCommandRef.current = sendCommand;
+  }, [sendCommand, bridgeUrl]);
+
+  // Continuous read control: use recursive setTimeout to avoid overlap and keep latest sendCommand via ref
   const startContinuousRead = React.useCallback(() => {
-    if (continuousTimer.current) return;
-    // immediate
-    void sendCommand("20050026:");
-    continuousTimer.current = window.setInterval(() => {
-      void sendCommand("20050026:");
-    }, 1000);
+    if (continuousControl.current.running) return;
+    continuousControl.current.running = true;
     setContinuousActive(true);
     addLog("info", "Uruchomiono ciągły odczyt Gross (co 1s)");
     showSuccess("Ciągły odczyt Gross rozpoczęty");
-  }, [sendCommand]);
+
+    const loop = async () => {
+      if (!continuousControl.current.running) return;
+      try {
+        // call latest sendCommand
+        await sendCommandRef.current("20050026:");
+      } catch {
+        // ignore individual errors; they are logged in sendCommand
+      }
+      if (!continuousControl.current.running) return;
+      // schedule next
+      continuousControl.current.timeoutId = window.setTimeout(loop, CONTINUOUS_INTERVAL_MS);
+    };
+
+    // start immediately
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    (async () => {
+      await loop();
+    })();
+  }, []);
 
   const stopContinuousRead = React.useCallback(() => {
-    clearContinuousTimer();
+    if (!continuousControl.current.running && continuousControl.current.timeoutId === null) {
+      setContinuousActive(false);
+      return;
+    }
+    clearContinuousLoop();
     addLog("info", "Zatrzymano ciągły odczyt Gross");
     showSuccess("Ciągły odczyt Gross zatrzymany");
   }, []);
