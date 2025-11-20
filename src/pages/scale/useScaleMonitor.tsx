@@ -48,6 +48,7 @@ export type ScaleMonitorApi = {
   cmdHistory: CmdEntry[];
   wsUrl: string;
   bridgeUrl: string;
+  continuousActive: boolean;
   // actions
   setWsUrl: (s: string) => void;
   setBridgeUrl: (s: string) => void;
@@ -57,6 +58,8 @@ export type ScaleMonitorApi = {
   clearReadings: () => void;
   clearLogs: () => void;
   clearCmdHistory: () => void;
+  startContinuousRead: () => void;
+  stopContinuousRead: () => void;
 };
 
 export function useScaleMonitor(): ScaleMonitorApi {
@@ -68,12 +71,14 @@ export function useScaleMonitor(): ScaleMonitorApi {
   const [readings, setReadings] = React.useState<Reading[]>([]);
   const [logs, setLogs] = React.useState<LogEntry[]>([]);
   const [cmdHistory, setCmdHistory] = React.useState<CmdEntry[]>([]);
+  const [continuousActive, setContinuousActive] = React.useState(false);
 
   const wsRef = React.useRef<WebSocket | null>(null);
   const reconnectAttempt = React.useRef(0);
   const reconnectTimer = React.useRef<number | null>(null);
   const manualDisconnect = React.useRef(false);
   const keepaliveTimer = React.useRef<number | null>(null);
+  const continuousTimer = React.useRef<number | null>(null);
 
   const [wsUrl, setWsUrlState] = React.useState<string>(() => {
     try {
@@ -139,6 +144,14 @@ export function useScaleMonitor(): ScaleMonitorApi {
       window.clearInterval(keepaliveTimer.current);
       keepaliveTimer.current = null;
     }
+  };
+
+  const clearContinuousTimer = () => {
+    if (continuousTimer.current) {
+      window.clearInterval(continuousTimer.current);
+      continuousTimer.current = null;
+    }
+    setContinuousActive(false);
   };
 
   const scheduleReconnect = () => {
@@ -242,8 +255,7 @@ export function useScaleMonitor(): ScaleMonitorApi {
       if (!isNaN(num)) {
         // attempt to find unit after the number (small window)
         const colonIndex = colonMatch.index ?? str.indexOf(":");
-        const afterStart = colonIndex + (colonMatch[0]?.length ?? 0);
-        // But to be safe, search for unit after the colon occurrence:
+        // search for unit after the colon occurrence:
         const afterStr = str.slice(colonIndex + 1, colonIndex + 1 + 40);
         const unitMatch = afterStr.match(/\b(kg|g|lb|lbs|oz)\b/i);
         let unitFound = unitMatch ? unitMatch[1].toLowerCase() : "kg";
@@ -319,6 +331,7 @@ export function useScaleMonitor(): ScaleMonitorApi {
         setConnected(false);
         setStatus("disconnected");
         stopKeepalive();
+        clearContinuousTimer();
         addLog("warn", "Połączenie WebSocket zamknięte");
         if (!manualDisconnect.current) {
           showError("Połączenie WebSocket zamknięte — spróbuję ponownie");
@@ -354,6 +367,7 @@ export function useScaleMonitor(): ScaleMonitorApi {
     }
     clearReconnectTimer();
     stopKeepalive();
+    clearContinuousTimer();
     setConnected(false);
     if (manual) showError("Rozłączono ręcznie");
   };
@@ -465,6 +479,25 @@ export function useScaleMonitor(): ScaleMonitorApi {
     }
   };
 
+  // Continuous read control exposed on the hook
+  const startContinuousRead = React.useCallback(() => {
+    if (continuousTimer.current) return;
+    // immediate
+    void sendCommand("20050026:");
+    continuousTimer.current = window.setInterval(() => {
+      void sendCommand("20050026:");
+    }, 1000);
+    setContinuousActive(true);
+    addLog("info", "Uruchomiono ciągły odczyt Gross (co 1s)");
+    showSuccess("Ciągły odczyt Gross rozpoczęty");
+  }, [sendCommand]);
+
+  const stopContinuousRead = React.useCallback(() => {
+    clearContinuousTimer();
+    addLog("info", "Zatrzymano ciągły odczyt Gross");
+    showSuccess("Ciągły odczyt Gross zatrzymany");
+  }, []);
+
   // Auto-connect on mount and whenever wsUrl changes (restart connection)
   React.useEffect(() => {
     connect();
@@ -501,6 +534,7 @@ export function useScaleMonitor(): ScaleMonitorApi {
     cmdHistory,
     wsUrl,
     bridgeUrl,
+    continuousActive,
     setWsUrl,
     setBridgeUrl,
     connect,
@@ -509,5 +543,7 @@ export function useScaleMonitor(): ScaleMonitorApi {
     clearReadings,
     clearLogs,
     clearCmdHistory,
+    startContinuousRead,
+    stopContinuousRead,
   };
 }
