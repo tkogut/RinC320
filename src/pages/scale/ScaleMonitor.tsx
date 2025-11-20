@@ -235,9 +235,8 @@ const ScaleMonitor: React.FC = () => {
     if (manual) showError("Rozłączono ręcznie");
   };
 
-  // NEW: Always send commands via bridge (HTTP POST)
+  // Always send commands via bridge (HTTP POST)
   const sendCommand = async (cmd: string) => {
-    // Always use bridge instead of WebSocket for commands
     try {
       addLog("info", `Wysyłam komendę przez bridge: ${cmd} -> ${bridgeUrl}`);
       const res = await fetch(bridgeUrl, {
@@ -253,11 +252,9 @@ const ScaleMonitor: React.FC = () => {
         showError(`Bridge error: ${res.status}`);
         return;
       }
-      // try to parse JSON response but ignore if not JSON
       const body = await res.json().catch(() => null);
       addLog("info", `Bridge przyjął komendę: ${cmd}`);
       showSuccess(`Wysłano komendę: ${cmd}`);
-      // optionally do something with body if needed
       if (body && typeof body === "object") {
         addLog("info", `Odpowiedź bridge: ${JSON.stringify(body).slice(0, 500)}`);
       }
@@ -339,11 +336,16 @@ const ScaleMonitor: React.FC = () => {
         <div className="w-80">
           <SettingsPanel
             wsUrl={wsUrl}
+            bridgeUrl={bridgeUrl}
             onChange={(newUrl) => {
               setWsUrl(newUrl);
-              // reconnect will happen via useEffect
               addLog("info", `Zaktualizowano URL WS: ${newUrl}`);
               showSuccess("Zapisano ustawienia WebSocket");
+            }}
+            onChangeBridge={(newUrl) => {
+              setBridgeUrl(newUrl);
+              addLog("info", `Zaktualizowano URL Bridge: ${newUrl}`);
+              showSuccess("Zapisano ustawienia Bridge");
             }}
           />
 
