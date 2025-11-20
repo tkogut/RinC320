@@ -1,15 +1,12 @@
 use anyhow::Result;
 use futures::{SinkExt, StreamExt};
 use serde::Serialize;
-use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, Mutex};
 use tokio_tungstenite::tungstenite::Message;
-
-use reqwest::Client;
 
 #[derive(Serialize, Debug, Clone)]
 struct ScalePayload {
@@ -70,21 +67,14 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     // Address to NP301 converter (modify if needed)
-    let scale_addr = env::var("NP301_ADDR").unwrap_or_else(|_| "192.168.1.254:4001".to_string());
+    let scale_addr = "192.168.1.254:4001";
     log::info!("NP301 target address: {}", scale_addr);
-
-    // Bridge URL to send commands when NP301 is unavailable
-    let bridge_url = env::var("RIN_CMD_BRIDGE_URL").unwrap_or_else(|_| "http://localhost:8080/rincmd".to_string());
-    log::info!("Bridge URL: {}", bridge_url);
 
     // Shared optional TcpStream for writing to NP301
     let shared_tcp: Arc<Mutex<Option<TcpStream>>> = Arc::new(Mutex::new(None));
 
     // Channel to broadcast JSON strings to websocket clients
     let (tx, _rx) = broadcast::channel::<String>(64);
-
-    // reqwest client for bridge calls
-    let http_client = Arc::new(Client::new());
 
     // Spawn background task that keeps trying to connect to NP301 and reads lines
     {
@@ -99,13 +89,7 @@ async fn main() -> Result<()> {
                         log::info!("Połączono z NP301");
                         {
                             let mut guard = shared_tcp.lock().await;
-                            match stream.try_clone() {
-                                Ok(clone) => *guard = Some(clone),
-                                Err(e) => {
-                                    log::error!("Nieudane clone TcpStream: {}", e);
-                                    *guard = None;
-                                }
-                            }
+                            *guard = Some(stream.try_clone().expect("try_clone tcpstream failed"));
                         }
                         // Read loop
                         let guard_for_read = shared_tcp.clone();
@@ -152,10 +136,8 @@ async fn main() -> Result<()> {
     while let Ok((stream, addr)) = listener.accept().await {
         let tx = tx.clone();
         let shared_tcp = shared_tcp.clone();
-        let http_client = http_client.clone();
-        let bridge_url = bridge_url.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_ws_connection(stream, addr, tx, shared_tcp, http_client, bridge_url).await {
+            if let Err(e) = handle_ws_connection(stream, addr, tx, shared_tcp).await {
                 log::error!("Connection error: {}", e);
             }
         });
@@ -169,8 +151,6 @@ async fn handle_ws_connection(
     addr: SocketAddr,
     tx: broadcast::Sender<String>,
     shared_tcp: Arc<Mutex<Option<TcpStream>>>,
-    http_client: Arc<Client>,
-    bridge_url: String,
 ) -> Result<()> {
     log::info!("Nowe połączenie WS: {}", addr);
 
@@ -192,10 +172,6 @@ async fn handle_ws_connection(
 
     // Receive messages from ws client
     let shared_for_recv = shared_tcp.clone();
-    let tx_for_bridge = tx.clone();
-    let bridge_clone = bridge_url.clone();
-    let client_clone = http_client.clone();
-
     let receiver_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = ws_receiver.next().await {
             match msg {
@@ -223,45 +199,7 @@ async fn handle_ws_connection(
                                         log::info!("Wysłano do NP301: {:?}", String::from_utf8_lossy(&bytes));
                                     }
                                 } else {
-                                    // NP301 not connected — fallback to bridge
-                                    log::warn!("Brak połączenia z NP301 — używam bridge: {}", bridge_clone);
-                                    let client = client_clone.clone();
-                                    let bridge_url = bridge_clone.clone();
-                                    let tx_b = tx_for_bridge.clone();
-                                    let cmd_string = String::from_utf8_lossy(&bytes).to_string();
-                                    tokio::spawn(async move {
-                                        match client
-                                            .post(&bridge_url)
-                                            .json(&serde_json::json!({ "command": cmd_string }))
-                                            .send()
-                                            .await
-                                        {
-                                            Ok(resp) => {
-                                                match resp.text().await {
-                                                    Ok(text) => {
-                                                        log::info!("Bridge response: {}", text);
-                                                        // Try to parse a weight line from the returned text and broadcast
-                                                        if let Some(payload) = parse_weight_line(&text) {
-                                                            if let Ok(json) = serde_json::to_string(&payload) {
-                                                                let _ = tx_b.send(json);
-                                                            }
-                                                        } else {
-                                                            // Send raw text as JSON { raw: ... }
-                                                            if let Ok(json) = serde_json::to_string(&serde_json::json!({ "raw": text })) {
-                                                                let _ = tx_b.send(json);
-                                                            }
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        log::error!("Bridge responded but reading text failed: {}", e);
-                                                    }
-                                                }
-                                            }
-                                            Err(e) => {
-                                                log::error!("Błąd wywołania bridge: {}", e);
-                                            }
-                                        }
-                                    });
+                                    log::warn!("Brak połączenia z NP301 — komenda nie wysłana");
                                 }
                             }
                         } else if v.get("ping").is_some() {
