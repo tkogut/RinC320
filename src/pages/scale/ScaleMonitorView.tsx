@@ -89,7 +89,10 @@ const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
           <div className="mb-4">
             <div className="text-sm text-gray-500 mb-2">Sterowanie (komendy wysyłane przez bridge HTTP)</div>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => sendCommand("read_gross")} className="px-3 py-1 bg-blue-600 text-white rounded">
+              <button
+                onClick={() => sendCommand("20050026:")}
+                className="px-3 py-1 bg-blue-600 text-white rounded"
+              >
                 Read Gross
               </button>
               <button onClick={() => sendCommand("read_net")} className="px-3 py-1 bg-blue-500 text-white rounded">
