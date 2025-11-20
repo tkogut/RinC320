@@ -101,7 +101,7 @@ const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
               <button onClick={() => sendCommand("tare")} className="px-3 py-1 bg-yellow-500 text-white rounded">
                 Tare
               </button>
-              <button onClick={() => sendCommand("zero")} className="px-3 py-1 bg-orange-500 text-white rounded">
+              <button onClick={() => sendCommand("21120008:0B")} className="px-3 py-1 bg-orange-500 text-white rounded">
                 Zero
               </button>
             </div>
