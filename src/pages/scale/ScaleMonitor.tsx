@@ -4,13 +4,16 @@ import React from "react";
 import { showSuccess, showError } from "@/utils/toast";
 
 type ScaleMessage = {
-  weight: number;
-  unit: string;
-  status: string;
-  raw: string;
+  weight?: number;
+  unit?: string;
+  status?: string;
+  raw?: string;
 };
 
 const WS_URL = "ws://localhost:3001";
+const BASE_RECONNECT_DELAY_MS = 1000;
+const MAX_RECONNECT_DELAY_MS = 30_000;
+const KEEPALIVE_INTERVAL_MS = 20_000;
 
 const ScaleMonitor: React.FC = () => {
   const [connected, setConnected] = React.useState(false);
@@ -19,10 +22,59 @@ const ScaleMonitor: React.FC = () => {
   const [status, setStatus] = React.useState<string>("");
   const [raw, setRaw] = React.useState<string>("");
   const wsRef = React.useRef<WebSocket | null>(null);
+  const reconnectAttempt = React.useRef(0);
+  const reconnectTimer = React.useRef<number | null>(null);
+  const manualDisconnect = React.useRef(false);
+  const keepaliveTimer = React.useRef<number | null>(null);
+
+  const clearReconnectTimer = () => {
+    if (reconnectTimer.current) {
+      window.clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
+    }
+  };
+
+  const clearKeepalive = () => {
+    if (keepaliveTimer.current) {
+      window.clearInterval(keepaliveTimer.current);
+      keepaliveTimer.current = null;
+    }
+  };
+
+  const scheduleReconnect = () => {
+    if (manualDisconnect.current) return;
+    reconnectAttempt.current = Math.min(reconnectAttempt.current + 1, 32);
+    const delay = Math.min(
+      BASE_RECONNECT_DELAY_MS * 2 ** (reconnectAttempt.current - 1),
+      MAX_RECONNECT_DELAY_MS,
+    );
+    clearReconnectTimer();
+    reconnectTimer.current = window.setTimeout(() => {
+      connect();
+    }, delay);
+    console.debug(`Reconnecting in ${delay}ms`);
+  };
+
+  const startKeepalive = () => {
+    clearKeepalive();
+    keepaliveTimer.current = window.setInterval(() => {
+      try {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ ping: true }));
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, KEEPALIVE_INTERVAL_MS);
+  };
+
+  const stopKeepalive = () => {
+    clearKeepalive();
+  };
 
   const connect = () => {
+    manualDisconnect.current = false;
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
-      showError("WebSocket już łączy lub jest otwarty");
       return;
     }
 
@@ -31,42 +83,65 @@ const ScaleMonitor: React.FC = () => {
       wsRef.current = ws;
 
       ws.addEventListener("open", () => {
+        reconnectAttempt.current = 0;
+        clearReconnectTimer();
         setConnected(true);
         showSuccess("Połączono z backendem (WebSocket)");
+        startKeepalive();
       });
 
       ws.addEventListener("message", (ev) => {
         try {
           const data = JSON.parse(ev.data) as ScaleMessage;
-          setWeight(data.weight);
-          setUnit(data.unit || "kg");
-          setStatus(data.status || "");
-          setRaw(data.raw || "");
+          if (typeof data.weight === "number") {
+            setWeight(data.weight);
+          }
+          if (data.unit) setUnit(data.unit);
+          if (data.status) setStatus(data.status);
+          if (data.raw) setRaw(data.raw);
         } catch (err) {
-          console.error("Nieudane parsowanie wiadomości WS:", ev.data);
+          // If message not JSON or doesn't match, set raw
+          setRaw(String(ev.data));
         }
       });
 
       ws.addEventListener("close", () => {
         setConnected(false);
-        showError("Połączenie WebSocket zamknięte");
+        setStatus("disconnected");
+        stopKeepalive();
+        if (!manualDisconnect.current) {
+          showError("Połączenie WebSocket zamknięte — spróbuję ponownie");
+          scheduleReconnect();
+        } else {
+          showError("Połączenie WebSocket rozłączone ręcznie");
+        }
       });
 
       ws.addEventListener("error", (e) => {
         console.error("WebSocket error", e);
-        showError("Błąd WebSocket. Sprawdź backend.");
+        showError("Błąd WebSocket. Sprawdz backend.");
       });
     } catch (err) {
       console.error(err);
       showError("Nie udało się otworzyć WebSocket");
+      scheduleReconnect();
     }
   };
 
-  const disconnect = () => {
-    wsRef.current?.close();
-    wsRef.current = null;
+  const disconnect = (manual = true) => {
+    manualDisconnect.current = manual;
+    if (wsRef.current) {
+      try {
+        wsRef.current.close();
+      } catch (e) {
+        // ignore
+      }
+      wsRef.current = null;
+    }
+    clearReconnectTimer();
+    stopKeepalive();
     setConnected(false);
-    showError("Rozłączono");
+    if (manual) showError("Rozłączono ręcznie");
   };
 
   const sendCommand = (cmd: string) => {
@@ -74,9 +149,23 @@ const ScaleMonitor: React.FC = () => {
       showError("Brak połączenia z backendem");
       return;
     }
-    wsRef.current.send(JSON.stringify({ cmd }));
-    showSuccess(`Wysłano komendę: ${cmd}`);
+    try {
+      wsRef.current.send(JSON.stringify({ cmd }));
+      showSuccess(`Wysłano komendę: ${cmd}`);
+    } catch (e) {
+      showError("Nie udało się wysłać komendy");
+    }
   };
+
+  // Auto-connect on mount
+  React.useEffect(() => {
+    connect();
+    return () => {
+      manualDisconnect.current = true;
+      disconnect(true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow">
@@ -86,14 +175,17 @@ const ScaleMonitor: React.FC = () => {
         <div className="text-sm text-gray-500 mb-1">Połączenie z backendem (WebSocket)</div>
         <div className="flex items-center gap-2">
           <button
-            onClick={connect}
+            onClick={() => {
+              manualDisconnect.current = false;
+              connect();
+            }}
             disabled={connected}
             className="px-3 py-1 bg-green-600 text-white rounded disabled:opacity-50"
           >
             Połącz
           </button>
           <button
-            onClick={disconnect}
+            onClick={() => disconnect(true)}
             disabled={!connected}
             className="px-3 py-1 bg-red-600 text-white rounded disabled:opacity-50"
           >
@@ -112,7 +204,7 @@ const ScaleMonitor: React.FC = () => {
           <div className="text-lg text-gray-600">{unit}</div>
           <div className="ml-4 px-2 py-1 bg-gray-100 rounded text-sm">{status}</div>
         </div>
-        <div className="mt-2 text-xs text-gray-500">Surowe: {raw || "brak"}</div>
+        <div className="mt-2 text-xs text-gray-500 break-words">Surowe: {raw || "brak"}</div>
       </div>
 
       <div className="mb-4">

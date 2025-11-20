@@ -1,3 +1,4 @@
+use anyhow::Result;
 use futures::{SinkExt, StreamExt};
 use serde::Serialize;
 use std::net::SocketAddr;
@@ -16,7 +17,7 @@ struct ScalePayload {
 }
 
 fn parse_weight_line(line: &str) -> Option<ScalePayload> {
-    // Expect something like: "81050026:    426 kg G"
+    // Expect something like: "81050026:    426 kg G" or fallback to any leading number
     if let Some(pos) = line.find(':') {
         let rest = line[pos + 1..].trim();
         let parts: Vec<&str> = rest.split_whitespace().collect();
@@ -33,7 +34,6 @@ fn parse_weight_line(line: &str) -> Option<ScalePayload> {
                 });
             }
         } else if parts.len() >= 1 {
-            // fallback: try parse first token
             let num_str = parts[0].replace(',', ".");
             if let Ok(w) = num_str.parse::<f64>() {
                 return Some(ScalePayload {
@@ -44,150 +44,171 @@ fn parse_weight_line(line: &str) -> Option<ScalePayload> {
                 });
             }
         }
+    } else {
+        // Try to parse first token
+        let parts: Vec<&str> = line.trim().split_whitespace().collect();
+        if !parts.is_empty() {
+            let num = parts[0].replace(',', ".");
+            if let Ok(w) = num.parse::<f64>() {
+                return Some(ScalePayload {
+                    weight: w,
+                    unit: "kg".to_string(),
+                    status: "".to_string(),
+                    raw: line.to_string(),
+                });
+            }
+        }
     }
     None
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<()> {
     env_logger::init();
 
     // Address to NP301 converter (modify if needed)
     let scale_addr = "192.168.1.254:4001";
-    log::info!("Łączenie do NP301 pod adresem: {}", scale_addr);
+    log::info!("NP301 target address: {}", scale_addr);
 
-    // Spróbuj połączyć z urządzeniem (będzie w tle)
-    let tcp_stream = match TcpStream::connect(scale_addr).await {
-        Ok(s) => {
-            log::info!("Połączono z NP301.");
-            Some(Arc::new(Mutex::new(s)))
-        }
-        Err(e) => {
-            log::error!("Nie udało się połączyć z NP301: {}", e);
-            None
-        }
-    };
+    // Shared optional TcpStream for writing to NP301
+    let shared_tcp: Arc<Mutex<Option<TcpStream>>> = Arc::new(Mutex::new(None));
 
-    // Channel do broadcastu odczytów do wszystkich WebSocket klientów
-    let (tx, _rx) = broadcast::channel::<String>(32);
+    // Channel to broadcast JSON strings to websocket clients
+    let (tx, _rx) = broadcast::channel::<String>(64);
 
-    // Jeśli istnieje połączenie do skali, uruchom czytanie linii i broadcast
-    if let Some(tcp_arc) = tcp_stream.clone() {
-        let tx_clone = tx.clone();
+    // Spawn background task that keeps trying to connect to NP301 and reads lines
+    {
+        let tx = tx.clone();
+        let shared_tcp = shared_tcp.clone();
+        let scale_addr = scale_addr.to_string();
         tokio::spawn(async move {
-            let guard = tcp_arc.lock().await;
-            let reader = guard.try_clone();
-            drop(guard);
-            // try_clone might fail for some TcpStream impls; instead re-open connection if needed
-            match TcpStream::connect(scale_addr).await {
-                Ok(stream2) => {
-                    let reader = BufReader::new(stream2);
-                    let mut lines = reader.lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
-                        log::debug!("Otrzymano z NP301: {:?}", line);
-                        if let Some(payload) = parse_weight_line(&line) {
-                            if let Ok(json) = serde_json::to_string(&payload) {
-                                let _ = tx_clone.send(json);
-                            }
-                        } else {
-                            // Forward raw line as simple JSON with raw only
-                            if let Ok(json) = serde_json::to_string(&serde_json::json!({ "raw": line })) {
-                                let _ = tx_clone.send(json);
-                            }
+            loop {
+                log::info!("Próba połączenia z NP301: {}", scale_addr);
+                match TcpStream::connect(&scale_addr).await {
+                    Ok(stream) => {
+                        log::info!("Połączono z NP301");
+                        {
+                            let mut guard = shared_tcp.lock().await;
+                            *guard = Some(stream.try_clone().expect("try_clone tcpstream failed"));
                         }
+                        // Read loop
+                        let guard_for_read = shared_tcp.clone();
+                        if let Some(ref conn) = *guard_for_read.lock().await {
+                            let reader = BufReader::new(conn.try_clone().expect("clone for reader failed"));
+                            let mut lines = reader.lines();
+                            while let Ok(Some(line)) = lines.next_line().await {
+                                log::debug!("Otrzymano z NP301: {}", line);
+                                if let Some(payload) = parse_weight_line(&line) {
+                                    if let Ok(json) = serde_json::to_string(&payload) {
+                                        let _ = tx.send(json);
+                                    }
+                                } else {
+                                    if let Ok(json) = serde_json::to_string(&serde_json::json!({ "raw": line })) {
+                                        let _ = tx.send(json);
+                                    }
+                                }
+                            }
+                            log::warn!("Czytanie z NP301 zakończone (pętla).");
+                        }
+                        // Clean up
+                        {
+                            let mut guard = shared_tcp.lock().await;
+                            *guard = None;
+                        }
+                        // wait a bit before reconnect attempt
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                     }
-                    log::warn!("Czytanie z NP301 zakończone.");
-                }
-                Err(e) => {
-                    log::error!("Błąd przy tworzeniu readera do NP301: {}", e);
+                    Err(e) => {
+                        log::error!("Błąd łączenia do NP301: {}", e);
+                        // backoff a bit
+                        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    }
                 }
             }
         });
-    } else {
-        log::warn!("Brak aktywnego połączenia do NP301 przy starcie; backend może próbować łączyć ponownie.");
     }
 
-    // WebSocket server (dla frontend)
+    // WebSocket server
     let ws_addr = "0.0.0.0:3001";
-    let try_socket = TcpListener::bind(ws_addr).await?;
-    log::info!("WebSocket server nasłuchuje na: {}", ws_addr);
+    let listener = TcpListener::bind(ws_addr).await?;
+    log::info!("WebSocket server listening on {}", ws_addr);
 
-    while let Ok((stream, addr)) = try_socket.accept().await {
-        let peer = addr.clone();
+    while let Ok((stream, addr)) = listener.accept().await {
         let tx = tx.clone();
-        let tcp_for_write = tcp_stream.clone();
-        tokio::spawn(handle_connection(stream, peer, tx, tcp_for_write));
+        let shared_tcp = shared_tcp.clone();
+        tokio::spawn(async move {
+            if let Err(e) = handle_ws_connection(stream, addr, tx, shared_tcp).await {
+                log::error!("Connection error: {}", e);
+            }
+        });
     }
 
     Ok(())
 }
 
-async fn handle_connection(
+async fn handle_ws_connection(
     raw_stream: TcpStream,
     addr: SocketAddr,
     tx: broadcast::Sender<String>,
-    tcp_for_write: Option<Arc<Mutex<TcpStream>>>,
-) {
-    log::info!("Nowe połączenie WebSocket: {}", addr);
+    shared_tcp: Arc<Mutex<Option<TcpStream>>>,
+) -> Result<()> {
+    log::info!("Nowe połączenie WS: {}", addr);
 
-    let ws_stream = match tokio_tungstenite::accept_async(raw_stream).await {
-        Ok(ws) => ws,
-        Err(e) => {
-            log::error!("WebSocket accept error: {}", e);
-            return;
-        }
-    };
-
+    let ws_stream = tokio_tungstenite::accept_async(raw_stream).await?;
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
-    // subscribe do channelu
+    // subscribe to broadcast
     let mut rx = tx.subscribe();
 
-    // Task: forward broadcast -> ws client
-    let mut forward_task = tokio::spawn(async move {
+    // Forward broadcast -> ws client
+    let mut ws_sender_clone = ws_sender.clone();
+    let forward_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
-            if ws_sender.send(Message::Text(msg)).await.is_err() {
+            if ws_sender_clone.send(Message::Text(msg)).await.is_err() {
                 break;
             }
         }
     });
 
-    // Task: read messages od klienta i wykonaj komendy (wysyłaj do NP301)
-    let write_task_tcp = tcp_for_write.clone();
-    let mut receiver_task = tokio::spawn(async move {
+    // Receive messages from ws client
+    let shared_for_recv = shared_tcp.clone();
+    let receiver_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = ws_receiver.next().await {
             match msg {
                 Message::Text(txt) => {
-                    // oczekujemy prostego JSONu { "cmd": "read_gross" } lub plain text
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) {
                         if let Some(cmd) = v.get("cmd").and_then(|c| c.as_str()) {
                             log::info!("Otrzymano komendę od WS: {}", cmd);
-                            if let Some(tcp_arc) = write_task_tcp.clone() {
-                                // Zmapuj komendy na sekwencje bajtów dla C320
-                                let cmd_str = match cmd {
-                                    "read_gross" => "20050026:",
-                                    "read_net" => "20110027:",
-                                    "tare" => "20120008:8003",
-                                    "zero" => "21120008:0B",
-                                    other => {
-                                        log::warn!("Nieznana komenda: {}", other);
-                                        ""
-                                    }
-                                };
-                                if !cmd_str.is_empty() {
-                                    let mut guard = tcp_arc.lock().await;
-                                    if let Err(e) = guard.write_all(format!("{}\n", cmd_str).as_bytes()).await {
+                            // Map to NP301 command bytes or sequences — adjust to your device protocol
+                            let cmd_bytes = match cmd {
+                                "read_gross" => Some(b"READ:GROSS\n".to_vec()),
+                                "read_net" => Some(b"READ:NET\n".to_vec()),
+                                "tare" => Some(b"TARE\n".to_vec()),
+                                "zero" => Some(b"ZERO\n".to_vec()),
+                                other => {
+                                    log::warn!("Nieznana komenda: {}", other);
+                                    None
+                                }
+                            };
+                            if let Some(bytes) = cmd_bytes {
+                                let mut guard = shared_for_recv.lock().await;
+                                if let Some(ref mut tcp) = *guard {
+                                    if let Err(e) = tcp.write_all(&bytes).await {
                                         log::error!("Błąd wysyłania do NP301: {}", e);
                                     } else {
-                                        log::info!("Wysłano do NP301: {}", cmd_str);
+                                        log::info!("Wysłano do NP301: {:?}", String::from_utf8_lossy(&bytes));
                                     }
+                                } else {
+                                    log::warn!("Brak połączenia z NP301 — komenda nie wysłana");
                                 }
-                            } else {
-                                log::warn!("Brak połączenia TCP do NP301 - nie można wysłać komendy");
                             }
+                        } else if v.get("ping").is_some() {
+                            // ignore ping
+                        } else {
+                            log::debug!("Otrzymano inne JSON: {}", txt);
                         }
                     } else {
-                        log::debug!("Otrzymano tekst z WS: {}", txt);
+                        log::debug!("Otrzymano tekst: {}", txt);
                     }
                 }
                 Message::Binary(_) => {}
@@ -197,18 +218,12 @@ async fn handle_connection(
         }
     });
 
-    // Czekaj aż jedno z zadań się zakończy (np. klient się rozłączy)
+    // Wait until either task ends
     tokio::select! {
-        _ = (&mut forward_task) => {
-            log::info!("Forward task dla {} zakończony", addr);
-        }
-        _ = (&mut receiver_task) => {
-            log::info!("Receiver task dla {} zakończony", addr);
-        }
+        _ = forward_task => {},
+        _ = receiver_task => {},
     }
 
-    // sprzątnij
-    let _ = forward_task.abort();
-    let _ = receiver_task.abort();
-    log::info!("Zamykam połączenie WebSocket: {}", addr);
+    log::info!("Zamykam połączenie WS: {}", addr);
+    Ok(())
 }
