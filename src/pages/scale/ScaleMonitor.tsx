@@ -15,7 +15,9 @@ type ScaleMessage = {
 };
 
 const DEFAULT_WS = "ws://localhost:3001";
+const DEFAULT_BRIDGE = "http://localhost:8080/rincmd";
 const STORAGE_KEY = "scale_ws_url";
+const BRIDGE_STORAGE_KEY = "scale_bridge_url";
 const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 const KEEPALIVE_INTERVAL_MS = 20_000;
@@ -52,6 +54,15 @@ const ScaleMonitor: React.FC = () => {
     }
   });
 
+  const [bridgeUrl, setBridgeUrl] = React.useState<string>(() => {
+    try {
+      const v = localStorage.getItem(BRIDGE_STORAGE_KEY);
+      return v || DEFAULT_BRIDGE;
+    } catch (e) {
+      return DEFAULT_BRIDGE;
+    }
+  });
+
   React.useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, wsUrl);
@@ -59,6 +70,14 @@ const ScaleMonitor: React.FC = () => {
       // ignore
     }
   }, [wsUrl]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(BRIDGE_STORAGE_KEY, bridgeUrl);
+    } catch (e) {
+      // ignore
+    }
+  }, [bridgeUrl]);
 
   const addLog = (level: LogEntry["level"], message: string) => {
     setLogs((prev) => {
@@ -216,19 +235,35 @@ const ScaleMonitor: React.FC = () => {
     if (manual) showError("Rozłączono ręcznie");
   };
 
-  const sendCommand = (cmd: string) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      addLog("warn", `Próba wysłania komendy przy braku połączenia: ${cmd}`);
-      showError("Brak połączenia z backendem");
-      return;
-    }
+  // NEW: Always send commands via bridge (HTTP POST)
+  const sendCommand = async (cmd: string) => {
+    // Always use bridge instead of WebSocket for commands
     try {
-      wsRef.current.send(JSON.stringify({ cmd }));
+      addLog("info", `Wysyłam komendę przez bridge: ${cmd} -> ${bridgeUrl}`);
+      const res = await fetch(bridgeUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ command: cmd }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        addLog("error", `Bridge zwrócił błąd ${res.status}: ${text}`);
+        showError(`Bridge error: ${res.status}`);
+        return;
+      }
+      // try to parse JSON response but ignore if not JSON
+      const body = await res.json().catch(() => null);
+      addLog("info", `Bridge przyjął komendę: ${cmd}`);
       showSuccess(`Wysłano komendę: ${cmd}`);
-      addLog("info", `Wysłano komendę: ${cmd}`);
+      // optionally do something with body if needed
+      if (body && typeof body === "object") {
+        addLog("info", `Odpowiedź bridge: ${JSON.stringify(body).slice(0, 500)}`);
+      }
     } catch (e) {
-      addLog("error", `Błąd wysyłania komendy: ${String(e)}`);
-      showError("Nie udało się wysłać komendy");
+      addLog("error", `Błąd wysyłania komendy przez bridge: ${String(e)}`);
+      showError("Nie udało się wysłać komendy przez bridge");
     }
   };
 
@@ -272,6 +307,7 @@ const ScaleMonitor: React.FC = () => {
                 {connected ? "Połączono" : "Rozłączono"}
               </div>
             </div>
+            <div className="mt-1 text-xs text-gray-500">Bridge (komendy): {bridgeUrl}</div>
           </div>
 
           <div className="mb-4">
@@ -285,14 +321,14 @@ const ScaleMonitor: React.FC = () => {
           </div>
 
           <div className="mb-4">
-            <div className="text-sm text-gray-500 mb-2">Sterowanie (wyślij komendę do miernika przez backend)</div>
+            <div className="text-sm text-gray-500 mb-2">Sterowanie (komendy wysyłane przez bridge HTTP)</div>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => sendCommand("read_gross")} className="px-3 py-1 bg-blue-600 text-white rounded">Read Gross</button>
               <button onClick={() => sendCommand("read_net")} className="px-3 py-1 bg-blue-500 text-white rounded">Read Net</button>
               <button onClick={() => sendCommand("tare")} className="px-3 py-1 bg-yellow-500 text-white rounded">Tare</button>
               <button onClick={() => sendCommand("zero")} className="px-3 py-1 bg-orange-500 text-white rounded">Zero</button>
             </div>
-            <div className="mt-2 text-xs text-gray-500">Uwaga: backend wysyła odpowiednie bajty do NP301.</div>
+            <div className="mt-2 text-xs text-gray-500">Uwaga: komendy trafiają bezpośrednio do bridge'a HTTP.</div>
           </div>
 
           <div className="mt-6 text-right">
