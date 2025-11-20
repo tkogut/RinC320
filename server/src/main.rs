@@ -8,6 +8,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, Mutex};
 use tokio_tungstenite::tungstenite::Message;
 use reqwest::Client;
+use tokio::net::tcp::OwnedWriteHalf;
 
 #[derive(Serialize, Debug, Clone)]
 struct ScalePayload {
@@ -71,8 +72,8 @@ async fn main() -> Result<()> {
     let scale_addr = "192.168.1.254:4001";
     log::info!("NP301 target address: {}", scale_addr);
 
-    // Shared optional TcpStream for writing to NP301
-    let shared_tcp: Arc<Mutex<Option<TcpStream>>> = Arc::new(Mutex::new(None));
+    // Shared optional OwnedWriteHalf for writing to NP301
+    let shared_writer: Arc<Mutex<Option<OwnedWriteHalf>>> = Arc::new(Mutex::new(None));
 
     // Channel to broadcast JSON strings to websocket clients
     let (tx, _rx) = broadcast::channel::<String>(64);
@@ -83,7 +84,7 @@ async fn main() -> Result<()> {
     // Spawn background task that keeps trying to connect to NP301 and reads lines
     {
         let tx = tx.clone();
-        let shared_tcp = shared_tcp.clone();
+        let shared_writer = shared_writer.clone();
         let scale_addr = scale_addr.to_string();
         tokio::spawn(async move {
             loop {
@@ -91,35 +92,31 @@ async fn main() -> Result<()> {
                 match TcpStream::connect(&scale_addr).await {
                     Ok(stream) => {
                         log::info!("Połączono z NP301");
+                        // Split into read and write halves
+                        let (read_half, write_half) = stream.into_split();
                         {
-                            let mut guard = shared_tcp.lock().await;
-                            *guard = Some(stream.try_clone().expect("try_clone tcpstream failed"));
+                            let mut guard = shared_writer.lock().await;
+                            *guard = Some(write_half);
                         }
-                        // Read loop
-                        let guard_for_read = shared_tcp.clone();
-                        if let Some(ref conn) = *guard_for_read.lock().await {
-                            let reader = BufReader::new(conn.try_clone().expect("clone for reader failed"));
-                            let mut lines = reader.lines();
-                            while let Ok(Some(line)) = lines.next_line().await {
-                                log::debug!("Otrzymano z NP301: {}", line);
-                                if let Some(payload) = parse_weight_line(&line) {
-                                    if let Ok(json) = serde_json::to_string(&payload) {
-                                        let _ = tx.send(json);
-                                    }
-                                } else {
-                                    if let Ok(json) = serde_json::to_string(&serde_json::json!({ "raw": line })) {
-                                        let _ = tx.send(json);
-                                    }
+                        let mut reader = BufReader::new(read_half).lines();
+                        while let Ok(Some(line)) = reader.next_line().await {
+                            log::debug!("Otrzymano z NP301: {}", line);
+                            if let Some(payload) = parse_weight_line(&line) {
+                                if let Ok(json) = serde_json::to_string(&payload) {
+                                    let _ = tx.send(json);
+                                }
+                            } else {
+                                if let Ok(json) = serde_json::to_string(&serde_json::json!({ "raw": line })) {
+                                    let _ = tx.send(json);
                                 }
                             }
-                            log::warn!("Czytanie z NP301 zakończone (pętla).");
                         }
-                        // Clean up
+                        log::warn!("Czytanie z NP301 zakończone (pętla).");
+                        // Clean up writer on disconnect
                         {
-                            let mut guard = shared_tcp.lock().await;
+                            let mut guard = shared_writer.lock().await;
                             *guard = None;
                         }
-                        // wait a bit before reconnect attempt
                         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                     }
                     Err(e) => {
@@ -139,10 +136,10 @@ async fn main() -> Result<()> {
 
     while let Ok((stream, addr)) = listener.accept().await {
         let tx = tx.clone();
-        let shared_tcp = shared_tcp.clone();
+        let shared_writer = shared_writer.clone();
         let client = http_client.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_ws_connection(stream, addr, tx, shared_tcp, client).await {
+            if let Err(e) = handle_ws_connection(stream, addr, tx, shared_writer, client).await {
                 log::error!("Connection error: {}", e);
             }
         });
@@ -155,7 +152,7 @@ async fn handle_ws_connection(
     raw_stream: TcpStream,
     addr: SocketAddr,
     tx: broadcast::Sender<String>,
-    shared_tcp: Arc<Mutex<Option<TcpStream>>>,
+    shared_writer: Arc<Mutex<Option<OwnedWriteHalf>>>,
     client: Client,
 ) -> Result<()> {
     log::info!("Nowe połączenie WS: {}", addr);
@@ -177,7 +174,7 @@ async fn handle_ws_connection(
     });
 
     // Receive messages from ws client
-    let shared_for_recv = shared_tcp.clone();
+    let shared_for_recv = shared_writer.clone();
     let tx_for_recv = tx.clone();
     let receiver_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = ws_receiver.next().await {
@@ -200,8 +197,8 @@ async fn handle_ws_connection(
                             let mut sent_to_np301 = false;
                             if let Some(bytes) = cmd_bytes {
                                 let mut guard = shared_for_recv.lock().await;
-                                if let Some(ref mut tcp) = *guard {
-                                    if let Err(e) = tcp.write_all(&bytes).await {
+                                if let Some(ref mut writer) = *guard {
+                                    if let Err(e) = writer.write_all(&bytes).await {
                                         log::error!("Błąd wysyłania do NP301: {}", e);
                                     } else {
                                         log::info!("Wysłano do NP301: {:?}", String::from_utf8_lossy(&bytes));
