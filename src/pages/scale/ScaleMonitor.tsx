@@ -253,6 +253,27 @@ const ScaleMonitor: React.FC = () => {
     if (manual) showError("Rozłączono ręcznie");
   };
 
+  // Helper: try to extract a numeric weight + unit from a string
+  const extractWeightFromString = (s?: string | null) => {
+    if (!s) return null;
+    // Look for patterns like "56 kg", "56000 g", "123.4kg", "12.3 lb", etc.
+    const re = /([+-]?\d{1,3}(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s*(kg|g|lb|lbs|oz)?/i;
+    const m = s.match(re);
+    if (!m) return null;
+    const rawNum = m[1].replace(",", ".");
+    const maybeUnit = m[2]?.toLowerCase() ?? "kg";
+    let num = parseFloat(rawNum);
+    let unitFound = maybeUnit;
+    if (isNaN(num)) return null;
+    // Normalize grams -> kilograms
+    if (unitFound === "g") {
+      num = num / 1000;
+      unitFound = "kg";
+    }
+    // normalize lbs/oz if desired in future (currently leave as-is)
+    return { num, unit: unitFound };
+  };
+
   // Always send commands via bridge (HTTP POST).
   // If bridgeUrl starts with "mock://" then emulate a local response for debugging.
   const sendCommand = async (cmd: string) => {
@@ -264,10 +285,27 @@ const ScaleMonitor: React.FC = () => {
       addLog("info", `Mock bridge: symuluję wysłanie komendy: ${cmd}`);
       try {
         await new Promise((res) => setTimeout(res, 400));
-        const resp = { ok: true, echoed: cmd, timestamp: new Date().toISOString() };
-        addCmd({ ...entryBase, status: "ok", resp: JSON.stringify(resp) });
-        addLog("info", `Mock bridge odpowiedział: ${JSON.stringify(resp)}`);
-        showSuccess(`Mock: ${cmd}`);
+        // Give a richer mock for common read commands
+        let respObj: any = { success: true, command: cmd, timestamp: new Date().toISOString() };
+        if (/read/i.test(cmd)) {
+          // return a fake weight example
+          respObj.response = `810${Math.floor(Math.random() * 900000)}: ${ (Math.random() * 10 + 1).toFixed(2) } kg G`;
+        } else {
+          respObj.response = `OK: ${cmd}`;
+        }
+        addCmd({ ...entryBase, status: "ok", resp: JSON.stringify(respObj) });
+        addLog("info", `Mock bridge odpowiedział: ${JSON.stringify(respObj)}`);
+        // Parse potential weight from response
+        const parsed = extractWeightFromString(respObj.response);
+        if (parsed) {
+          setWeight(parsed.num);
+          setUnit(parsed.unit);
+          pushReading(parsed.num);
+          addLog("info", `Zaktualizowano wagę z mock response: ${parsed.num} ${parsed.unit}`);
+          showSuccess(`Odczyt: ${parsed.num} ${parsed.unit}`);
+        } else {
+          showSuccess(`Mock: ${cmd}`);
+        }
         return;
       } catch (e) {
         addCmd({ ...entryBase, status: "error", resp: String(e) });
@@ -293,13 +331,54 @@ const ScaleMonitor: React.FC = () => {
         showError(`Bridge error: ${res.status}`);
         return;
       }
-      const body = await res.json().catch(() => null);
-      const respText = body ? JSON.stringify(body) : "OK";
+
+      // Try to parse JSON response; if not JSON, fall back to text
+      let body: any = null;
+      let rawText: string | null = null;
+      try {
+        body = await res.json().catch(() => null);
+      } catch {
+        body = null;
+      }
+      if (body) {
+        rawText = JSON.stringify(body);
+      } else {
+        rawText = await res.text().catch(() => null);
+      }
+
+      const respText = rawText ?? "OK";
       addCmd({ ...entryBase, status: "ok", resp: respText });
       addLog("info", `Bridge przyjął komendę: ${cmd}`);
       showSuccess(`Wysłano komendę: ${cmd}`);
-      if (body && typeof body === "object") {
-        addLog("info", `Odpowiedź bridge: ${JSON.stringify(body).slice(0, 500)}`);
+
+      // Try to extract weight from structured body.response or rawText
+      let parsed: { num: number; unit: string } | null = null;
+      if (body && typeof body === "object" && typeof body.response === "string") {
+        parsed = extractWeightFromString(body.response);
+        if (parsed) {
+          addLog("info", `Znaleziono wagę w body.response: ${body.response}`);
+        }
+      }
+      if (!parsed && typeof rawText === "string") {
+        parsed = extractWeightFromString(rawText);
+        if (parsed) {
+          addLog("info", `Znaleziono wagę w raw text response`);
+        }
+      }
+
+      if (parsed) {
+        setWeight(parsed.num);
+        setUnit(parsed.unit);
+        pushReading(parsed.num);
+        addLog("info", `Zaktualizowano wagę z odpowiedzi bridge: ${parsed.num} ${parsed.unit}`);
+        showSuccess(`Odczyt: ${parsed.num} ${parsed.unit}`);
+      } else {
+        // If body contains structured fields like "response" or "command" we log them above
+        if (body && typeof body === "object") {
+          addLog("info", `Odpowiedź bridge (bez wagi): ${JSON.stringify(body).slice(0, 500)}`);
+        } else {
+          addLog("info", `Odpowiedź bridge (tekst): ${String(rawText).slice(0, 500)}`);
+        }
       }
     } catch (e) {
       addCmd({ ...entryBase, status: "error", resp: String(e) });
