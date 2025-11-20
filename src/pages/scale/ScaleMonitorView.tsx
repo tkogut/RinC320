@@ -7,6 +7,7 @@ import ExportControls from "@/components/ExportControls";
 import LogsPanel from "@/components/LogsPanel";
 import CommandPanel from "@/components/CommandPanel";
 import HealthCheck from "@/components/HealthCheck";
+import { showSuccess } from "@/utils/toast";
 import type { ScaleMonitorApi } from "./useScaleMonitor";
 
 const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
@@ -30,6 +31,49 @@ const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
     clearLogs,
     clearCmdHistory,
   } = api;
+
+  const [continuousRead, setContinuousRead] = React.useState(false);
+  const continuousRef = React.useRef<number | null>(null);
+
+  const startContinuous = React.useCallback(() => {
+    if (continuousRef.current) return;
+    // immediate first read
+    sendCommand("20050026:");
+    continuousRef.current = window.setInterval(() => {
+      sendCommand("20050026:");
+    }, 1000);
+    setContinuousRead(true);
+    showSuccess("Ciągły odczyt Gross rozpoczęty");
+  }, [sendCommand]);
+
+  const stopContinuous = React.useCallback(() => {
+    if (continuousRef.current) {
+      window.clearInterval(continuousRef.current);
+      continuousRef.current = null;
+    }
+    setContinuousRead(false);
+    showSuccess("Ciągły odczyt Gross zatrzymany");
+  }, []);
+
+  // ensure continuous read is stopped when connection closes
+  React.useEffect(() => {
+    if (!connected) {
+      // stop on disconnect (user requested that Rozłącz wyłącza ciągły odczyt)
+      stopContinuous();
+    }
+    // do not add stopContinuous to deps to avoid race with sendCommand; we intentionally only watch connected
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected]);
+
+  // cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      if (continuousRef.current) {
+        window.clearInterval(continuousRef.current);
+        continuousRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow">
@@ -59,7 +103,11 @@ const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
                 Połącz
               </button>
               <button
-                onClick={() => disconnect(true)}
+                onClick={() => {
+                  // stop continuous read when explicitly disconnecting
+                  stopContinuous();
+                  disconnect(true);
+                }}
                 disabled={!connected}
                 className="px-3 py-1 bg-red-600 text-white rounded disabled:opacity-50"
               >
@@ -73,6 +121,24 @@ const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
                 {connected ? "Połączono" : "Rozłączono"}
               </div>
             </div>
+
+            {/* Continuous Gross read control placed under the connect/disconnect buttons */}
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                onClick={() => {
+                  if (!continuousRead) startContinuous();
+                  else stopContinuous();
+                }}
+                disabled={!connected}
+                className={`px-3 py-1 rounded text-sm ${continuousRead ? "bg-red-500 text-white" : "bg-gray-200 text-gray-800"} ${!connected ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                {continuousRead ? "Stop ciągłego odczytu Gross" : "Start ciągłego odczytu Gross"}
+              </button>
+              <div className="text-xs text-gray-500">
+                {continuousRead ? "Odczyty wysyłane co 1s" : "Brak ciągłego odczytu"}
+              </div>
+            </div>
+
             <div className="mt-1 text-xs text-gray-500">Bridge (komendy): {bridgeUrl}</div>
           </div>
 
