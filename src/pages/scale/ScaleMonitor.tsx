@@ -4,6 +4,8 @@ import React from "react";
 import { showSuccess, showError } from "@/utils/toast";
 import HistoryChart from "./HistoryChart";
 import SettingsPanel from "./SettingsPanel";
+import ExportControls from "@/components/ExportControls";
+import LogsPanel from "@/components/LogsPanel";
 
 type ScaleMessage = {
   weight?: number;
@@ -18,6 +20,13 @@ const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 const KEEPALIVE_INTERVAL_MS = 20_000;
 const HISTORY_LIMIT = 200;
+const LOG_LIMIT = 500;
+
+type LogEntry = {
+  ts: number;
+  level?: "info" | "warn" | "error";
+  message: string;
+};
 
 const ScaleMonitor: React.FC = () => {
   const [connected, setConnected] = React.useState(false);
@@ -26,6 +35,8 @@ const ScaleMonitor: React.FC = () => {
   const [status, setStatus] = React.useState<string>("");
   const [raw, setRaw] = React.useState<string>("");
   const [readings, setReadings] = React.useState<Array<{ ts: number; weight: number | null }>>([]);
+  const [logs, setLogs] = React.useState<LogEntry[]>([]);
+
   const wsRef = React.useRef<WebSocket | null>(null);
   const reconnectAttempt = React.useRef(0);
   const reconnectTimer = React.useRef<number | null>(null);
@@ -48,6 +59,16 @@ const ScaleMonitor: React.FC = () => {
       // ignore
     }
   }, [wsUrl]);
+
+  const addLog = (level: LogEntry["level"], message: string) => {
+    setLogs((prev) => {
+      const next = [...prev, { ts: Date.now(), level, message }];
+      if (next.length > LOG_LIMIT) {
+        next.splice(0, next.length - LOG_LIMIT);
+      }
+      return next;
+    });
+  };
 
   const clearReconnectTimer = () => {
     if (reconnectTimer.current) {
@@ -74,6 +95,7 @@ const ScaleMonitor: React.FC = () => {
     reconnectTimer.current = window.setTimeout(() => {
       connect();
     }, delay);
+    addLog("info", `Ponowne łączenie za ${delay}ms`);
     console.debug(`Reconnecting in ${delay}ms`);
   };
 
@@ -83,6 +105,7 @@ const ScaleMonitor: React.FC = () => {
       try {
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ ping: true }));
+          addLog("info", "Wysłano ping keepalive");
         }
       } catch (e) {
         // ignore
@@ -107,18 +130,21 @@ const ScaleMonitor: React.FC = () => {
   const connect = () => {
     manualDisconnect.current = false;
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+      addLog("warn", "WebSocket już łączy lub jest otwarty");
       return;
     }
 
     try {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+      addLog("info", `Tworzę połączenie WS -> ${wsUrl}`);
 
       ws.addEventListener("open", () => {
         reconnectAttempt.current = 0;
         clearReconnectTimer();
         setConnected(true);
         showSuccess("Połączono z backendem (WebSocket)");
+        addLog("info", "Połączono z backendem (open)");
         startKeepalive();
       });
 
@@ -128,17 +154,21 @@ const ScaleMonitor: React.FC = () => {
           if (typeof data.weight === "number") {
             setWeight(data.weight);
             pushReading(data.weight);
+            addLog("info", `Otrzymano wagę: ${data.weight} ${data.unit ?? ""}`);
           } else {
             // push null to keep timeline if desired
             pushReading(null);
+            addLog("info", `Otrzymano nie-metryczny komunikat: ${String(ev.data).slice(0, 200)}`);
           }
           if (data.unit) setUnit(data.unit);
           if (data.status) setStatus(data.status);
           if (data.raw) setRaw(data.raw);
         } catch (err) {
           // If message not JSON or doesn't match, set raw and push null reading
-          setRaw(String(ev.data));
+          const text = String(ev.data);
+          setRaw(text);
           pushReading(null);
+          addLog("warn", `Nieparsowalna wiadomość WS: ${text.slice(0, 200)}`);
         }
       });
 
@@ -146,6 +176,7 @@ const ScaleMonitor: React.FC = () => {
         setConnected(false);
         setStatus("disconnected");
         stopKeepalive();
+        addLog("warn", "Połączenie WebSocket zamknięte");
         if (!manualDisconnect.current) {
           showError("Połączenie WebSocket zamknięte — spróbuję ponownie");
           scheduleReconnect();
@@ -156,10 +187,12 @@ const ScaleMonitor: React.FC = () => {
 
       ws.addEventListener("error", (e) => {
         console.error("WebSocket error", e);
+        addLog("error", `WebSocket error: ${String(e)}`);
         showError("Błąd WebSocket. Sprawdź backend.");
       });
     } catch (err) {
       console.error(err);
+      addLog("error", `Nie udało się otworzyć WebSocket: ${String(err)}`);
       showError("Nie udało się otworzyć WebSocket");
       scheduleReconnect();
     }
@@ -170,8 +203,10 @@ const ScaleMonitor: React.FC = () => {
     if (wsRef.current) {
       try {
         wsRef.current.close();
+        addLog("info", "Zamykam połączenie WebSocket (close)");
       } catch (e) {
         // ignore
+        addLog("warn", "Błąd przy zamykaniu WebSocket");
       }
       wsRef.current = null;
     }
@@ -183,13 +218,16 @@ const ScaleMonitor: React.FC = () => {
 
   const sendCommand = (cmd: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      addLog("warn", `Próba wysłania komendy przy braku połączenia: ${cmd}`);
       showError("Brak połączenia z backendem");
       return;
     }
     try {
       wsRef.current.send(JSON.stringify({ cmd }));
       showSuccess(`Wysłano komendę: ${cmd}`);
+      addLog("info", `Wysłano komendę: ${cmd}`);
     } catch (e) {
+      addLog("error", `Błąd wysyłania komendy: ${String(e)}`);
       showError("Nie udało się wysłać komendy");
     }
   };
@@ -258,16 +296,7 @@ const ScaleMonitor: React.FC = () => {
           </div>
 
           <div className="mt-6 text-right">
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                showSuccess("Interfejs lokalny gotowy. Uruchom Rust backend aby połączyć się z rzeczywistą wagą.");
-              }}
-              className="text-sm text-gray-600 underline"
-            >
-              Informacje o połączeniu
-            </a>
+            <ExportControls readings={readings} logs={logs} />
           </div>
         </div>
 
@@ -277,7 +306,16 @@ const ScaleMonitor: React.FC = () => {
             onChange={(newUrl) => {
               setWsUrl(newUrl);
               // reconnect will happen via useEffect
+              addLog("info", `Zaktualizowano URL WS: ${newUrl}`);
               showSuccess("Zapisano ustawienia WebSocket");
+            }}
+          />
+
+          <LogsPanel
+            logs={logs}
+            onClear={() => {
+              setLogs([]);
+              addLog("info", "Wyczyszczono logi");
             }}
           />
         </div>
@@ -295,6 +333,7 @@ const ScaleMonitor: React.FC = () => {
             <button
               onClick={() => {
                 setReadings([]);
+                addLog("info", "Wyczyszczono historię odczytów");
                 showSuccess("Wyczyszczono historię odczytów");
               }}
               className="px-2 py-1 bg-gray-200 rounded"
