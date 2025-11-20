@@ -184,22 +184,79 @@ export function useScaleMonitor(): ScaleMonitorApi {
     });
   };
 
+  /**
+   * Improved weight extraction:
+   * 1) Prefer a numeric token that has an explicit unit (kg/g/lb/lbs/oz).
+   * 2) If none, try to find a number after a ':' (common "register: value" responses).
+   * 3) Otherwise, fall back to the last numeric token in the string (so register prefixes at the start are ignored).
+   */
   const extractWeightFromString = (s?: string | null) => {
     if (!s) return null;
-    // Look for patterns like "56 kg", "56000 g", "123.4kg", "12.3 lb", etc.
-    const re = /([+-]?\d{1,3}(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s*(kg|g|lb|lbs|oz)?/i;
-    const m = s.match(re);
-    if (!m) return null;
-    const rawNum = m[1].replace(",", ".");
-    const maybeUnit = m[2]?.toLowerCase() ?? "kg";
-    let num = parseFloat(rawNum);
-    let unitFound = maybeUnit;
-    if (isNaN(num)) return null;
-    if (unitFound === "g") {
-      num = num / 1000;
-      unitFound = "kg";
+    const str = String(s);
+
+    // Regex to capture number and optional unit (case-insensitive)
+    const tokenRe = /([+-]?\d+(?:[.,]\d+)?)(?:\s*(kg|g|lb|lbs|oz))?/gi;
+
+    let match: RegExpExecArray | null;
+    const numericTokens: Array<{ raw: string; unit?: string; index: number }> = [];
+    const withUnitTokens: Array<{ raw: string; unit: string; index: number }> = [];
+
+    while ((match = tokenRe.exec(str)) !== null) {
+      const rawNum = match[1];
+      const unit = match[2]?.toLowerCase();
+      const idx = match.index;
+      if (unit) {
+        withUnitTokens.push({ raw: rawNum, unit, index: idx });
+      } else {
+        numericTokens.push({ raw: rawNum, index: idx });
+      }
     }
-    return { num, unit: unitFound };
+
+    // 1) If we found any token with explicit unit, prefer the one that appears latest (in case multiple)
+    if (withUnitTokens.length > 0) {
+      const chosen = withUnitTokens[withUnitTokens.length - 1];
+      const num = parseFloat(chosen.raw.replace(",", "."));
+      if (isNaN(num)) return null;
+      let unitFound = chosen.unit;
+      let finalNum = num;
+      if (unitFound === "g") {
+        finalNum = finalNum / 1000;
+        unitFound = "kg";
+      }
+      return { num: finalNum, unit: unitFound };
+    }
+
+    // 2) Try to find a number that occurs after a colon ":" (common format "81050026: 55 kg G")
+    const colonRe = /:\s*([+-]?\d+(?:[.,]\d+)?)/;
+    const colonMatch = str.match(colonRe);
+    if (colonMatch && colonMatch[1]) {
+      const num = parseFloat(colonMatch[1].replace(",", "."));
+      if (!isNaN(num)) {
+        // check if there's a unit after that number
+        const afterColonIdx = colonMatch.index! + colonMatch[0].indexOf(colonMatch[1]) + colonMatch[1].length;
+        // look for unit occurrence after the colonMatch
+        const afterStr = str.slice(afterColonIdx, afterColonIdx + 20); // small window
+        const unitMatch = afterStr.match(/\b(kg|g|lb|lbs|oz)\b/i);
+        let unitFound = unitMatch ? unitMatch[1].toLowerCase() : "kg";
+        let finalNum = num;
+        if (unitFound === "g") {
+          finalNum = finalNum / 1000;
+          unitFound = "kg";
+        }
+        return { num: finalNum, unit: unitFound };
+      }
+    }
+
+    // 3) Fallback: pick the last numeric token we found (ignores early register prefix)
+    if (numericTokens.length > 0) {
+      const last = numericTokens[numericTokens.length - 1];
+      const num = parseFloat(last.raw.replace(",", "."));
+      if (isNaN(num)) return null;
+      // no explicit unit found; default to kg
+      return { num, unit: "kg" };
+    }
+
+    return null;
   };
 
   const connect = () => {
