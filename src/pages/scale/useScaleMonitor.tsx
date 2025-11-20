@@ -332,13 +332,17 @@ export function useScaleMonitor(): ScaleMonitorApi {
         setConnected(false);
         setStatus("disconnected");
         stopKeepalive();
-        clearContinuousLoop();
         addLog("warn", "Połączenie WebSocket zamknięte");
-        if (!manualDisconnect.current) {
+
+        // Only stop continuous read when disconnect was requested manually by the user.
+        // If the close was due to network/remote error, keep continuous reading active
+        // (it may still work via the bridge). The reconnect logic will run for non-manual closes.
+        if (manualDisconnect.current) {
+          clearContinuousLoop();
+          showError("Połączenie WebSocket rozłączone ręcznie");
+        } else {
           showError("Połączenie WebSocket zamknięte — spróbuję ponownie");
           scheduleReconnect();
-        } else {
-          showError("Połączenie WebSocket rozłączone ręcznie");
         }
       });
 
