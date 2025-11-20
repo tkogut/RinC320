@@ -187,15 +187,18 @@ export function useScaleMonitor(): ScaleMonitorApi {
   /**
    * Improved weight extraction:
    * 1) Prefer a numeric token that has an explicit unit (kg/g/lb/lbs/oz).
-   * 2) If none, try to find a number after a ':' (common "register: value" responses).
+   *    This now accepts optional whitespace between sign and digits (e.g. "- 23 kg").
+   * 2) If none, try to find a number after a ':' (common "register: value" responses),
+   *    and accept forms like ":- 23" or ": -23".
    * 3) Otherwise, fall back to the last numeric token in the string (so register prefixes at the start are ignored).
    */
   const extractWeightFromString = (s?: string | null) => {
     if (!s) return null;
     const str = String(s);
 
-    // Regex to capture number and optional unit (case-insensitive)
-    const tokenRe = /([+-]?\d+(?:[.,]\d+)?)(?:\s*(kg|g|lb|lbs|oz))?/gi;
+    // Regex to capture a numeric token possibly with a sign (allowing whitespace after sign),
+    // and an optional unit immediately after.
+    const tokenRe = /([+-]?\s*\d+(?:[.,]\d+)?)(?:\s*(kg|g|lb|lbs|oz))?/gi;
 
     let match: RegExpExecArray | null;
     const numericTokens: Array<{ raw: string; unit?: string; index: number }> = [];
@@ -215,7 +218,9 @@ export function useScaleMonitor(): ScaleMonitorApi {
     // 1) If we found any token with explicit unit, prefer the one that appears latest (in case multiple)
     if (withUnitTokens.length > 0) {
       const chosen = withUnitTokens[withUnitTokens.length - 1];
-      const num = parseFloat(chosen.raw.replace(",", "."));
+      // remove internal spaces so "- 23" becomes "-23"
+      const cleaned = chosen.raw.replace(/\s+/g, "");
+      const num = parseFloat(cleaned.replace(",", "."));
       if (isNaN(num)) return null;
       let unitFound = chosen.unit;
       let finalNum = num;
@@ -226,16 +231,20 @@ export function useScaleMonitor(): ScaleMonitorApi {
       return { num: finalNum, unit: unitFound };
     }
 
-    // 2) Try to find a number that occurs after a colon ":" (common format "81050026: 55 kg G")
-    const colonRe = /:\s*([+-]?\d+(?:[.,]\d+)?)/;
+    // 2) Try to find a number that occurs after a colon ":" (common format "81050026: 55 kg G" or "81050026:- 23 kg G")
+    const colonRe = /:\s*([+-]?)\s*([0-9]+(?:[.,][0-9]+)?)/;
     const colonMatch = str.match(colonRe);
-    if (colonMatch && colonMatch[1]) {
-      const num = parseFloat(colonMatch[1].replace(",", "."));
+    if (colonMatch && colonMatch[2]) {
+      const signPart = colonMatch[1] || "";
+      const numPart = colonMatch[2];
+      const rawNum = `${signPart}${numPart}`.replace(",", ".");
+      const num = parseFloat(rawNum);
       if (!isNaN(num)) {
-        // check if there's a unit after that number
-        const afterColonIdx = colonMatch.index! + colonMatch[0].indexOf(colonMatch[1]) + colonMatch[1].length;
-        // look for unit occurrence after the colonMatch
-        const afterStr = str.slice(afterColonIdx, afterColonIdx + 20); // small window
+        // attempt to find unit after the number (small window)
+        const colonIndex = colonMatch.index ?? str.indexOf(":");
+        const afterStart = colonIndex + (colonMatch[0]?.length ?? 0);
+        // But to be safe, search for unit after the colon occurrence:
+        const afterStr = str.slice(colonIndex + 1, colonIndex + 1 + 40);
         const unitMatch = afterStr.match(/\b(kg|g|lb|lbs|oz)\b/i);
         let unitFound = unitMatch ? unitMatch[1].toLowerCase() : "kg";
         let finalNum = num;
@@ -250,7 +259,8 @@ export function useScaleMonitor(): ScaleMonitorApi {
     // 3) Fallback: pick the last numeric token we found (ignores early register prefix)
     if (numericTokens.length > 0) {
       const last = numericTokens[numericTokens.length - 1];
-      const num = parseFloat(last.raw.replace(",", "."));
+      const cleaned = last.raw.replace(/\s+/g, "");
+      const num = parseFloat(cleaned.replace(",", "."));
       if (isNaN(num)) return null;
       // no explicit unit found; default to kg
       return { num, unit: "kg" };
@@ -357,8 +367,10 @@ export function useScaleMonitor(): ScaleMonitorApi {
       try {
         await new Promise((res) => setTimeout(res, 400));
         let respObj: any = { success: true, command: cmd, timestamp: new Date().toISOString() };
-        if (/read/i.test(cmd)) {
+        if (/read/i.test(cmd) || /20050026:/.test(cmd)) {
           respObj.response = `810${Math.floor(Math.random() * 900000)}: ${(Math.random() * 10 + 1).toFixed(2)} kg G`;
+        } else if (/21120008:0B/.test(cmd)) {
+          respObj.response = `81120008:0000`;
         } else {
           respObj.response = `OK: ${cmd}`;
         }
