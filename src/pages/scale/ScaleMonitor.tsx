@@ -6,6 +6,7 @@ import HistoryChart from "./HistoryChart";
 import SettingsPanel from "./SettingsPanel";
 import ExportControls from "@/components/ExportControls";
 import LogsPanel from "@/components/LogsPanel";
+import CommandPanel from "@/components/CommandPanel";
 
 type ScaleMessage = {
   weight?: number;
@@ -23,11 +24,19 @@ const MAX_RECONNECT_DELAY_MS = 30_000;
 const KEEPALIVE_INTERVAL_MS = 20_000;
 const HISTORY_LIMIT = 200;
 const LOG_LIMIT = 500;
+const CMD_HISTORY_LIMIT = 100;
 
 type LogEntry = {
   ts: number;
   level?: "info" | "warn" | "error";
   message: string;
+};
+
+type CmdEntry = {
+  ts: number;
+  cmd: string;
+  status: "sent" | "ok" | "error";
+  resp?: string;
 };
 
 const ScaleMonitor: React.FC = () => {
@@ -38,6 +47,7 @@ const ScaleMonitor: React.FC = () => {
   const [raw, setRaw] = React.useState<string>("");
   const [readings, setReadings] = React.useState<Array<{ ts: number; weight: number | null }>>([]);
   const [logs, setLogs] = React.useState<LogEntry[]>([]);
+  const [cmdHistory, setCmdHistory] = React.useState<CmdEntry[]>([]);
 
   const wsRef = React.useRef<WebSocket | null>(null);
   const reconnectAttempt = React.useRef(0);
@@ -85,6 +95,14 @@ const ScaleMonitor: React.FC = () => {
       if (next.length > LOG_LIMIT) {
         next.splice(0, next.length - LOG_LIMIT);
       }
+      return next;
+    });
+  };
+
+  const addCmd = (entry: CmdEntry) => {
+    setCmdHistory((prev) => {
+      const next = [...prev, entry];
+      if (next.length > CMD_HISTORY_LIMIT) next.splice(0, next.length - CMD_HISTORY_LIMIT);
       return next;
     });
   };
@@ -235,9 +253,30 @@ const ScaleMonitor: React.FC = () => {
     if (manual) showError("Rozłączono ręcznie");
   };
 
-  // NEW: Always send commands via bridge (HTTP POST)
+  // Always send commands via bridge (HTTP POST).
+  // If bridgeUrl starts with "mock://" then emulate a local response for debugging.
   const sendCommand = async (cmd: string) => {
-    // Always use bridge instead of WebSocket for commands
+    const entryBase: CmdEntry = { ts: Date.now(), cmd, status: "sent" };
+    addCmd(entryBase);
+
+    if (bridgeUrl.startsWith("mock://")) {
+      // emulate network delay and response
+      addLog("info", `Mock bridge: symuluję wysłanie komendy: ${cmd}`);
+      try {
+        await new Promise((res) => setTimeout(res, 400));
+        const resp = { ok: true, echoed: cmd, timestamp: new Date().toISOString() };
+        addCmd({ ...entryBase, status: "ok", resp: JSON.stringify(resp) });
+        addLog("info", `Mock bridge odpowiedział: ${JSON.stringify(resp)}`);
+        showSuccess(`Mock: ${cmd}`);
+        return;
+      } catch (e) {
+        addCmd({ ...entryBase, status: "error", resp: String(e) });
+        addLog("error", `Mock bridge błąd: ${String(e)}`);
+        showError("Mock bridge error");
+        return;
+      }
+    }
+
     try {
       addLog("info", `Wysyłam komendę przez bridge: ${cmd} -> ${bridgeUrl}`);
       const res = await fetch(bridgeUrl, {
@@ -249,19 +288,21 @@ const ScaleMonitor: React.FC = () => {
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
+        addCmd({ ...entryBase, status: "error", resp: `HTTP ${res.status}: ${text}` });
         addLog("error", `Bridge zwrócił błąd ${res.status}: ${text}`);
         showError(`Bridge error: ${res.status}`);
         return;
       }
-      // try to parse JSON response but ignore if not JSON
       const body = await res.json().catch(() => null);
+      const respText = body ? JSON.stringify(body) : "OK";
+      addCmd({ ...entryBase, status: "ok", resp: respText });
       addLog("info", `Bridge przyjął komendę: ${cmd}`);
       showSuccess(`Wysłano komendę: ${cmd}`);
-      // optionally do something with body if needed
       if (body && typeof body === "object") {
         addLog("info", `Odpowiedź bridge: ${JSON.stringify(body).slice(0, 500)}`);
       }
     } catch (e) {
+      addCmd({ ...entryBase, status: "error", resp: String(e) });
       addLog("error", `Błąd wysyłania komendy przez bridge: ${String(e)}`);
       showError("Nie udało się wysłać komendy przez bridge");
     }
@@ -281,7 +322,13 @@ const ScaleMonitor: React.FC = () => {
     <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
-          <h2 className="text-2xl font-semibold mb-2">Monitor wagi Rinstrum C320</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-semibold mb-2">Monitor wagi Rinstrum C320</h2>
+            <div className="text-xs">
+              <span className="px-2 py-1 rounded bg-indigo-100 text-indigo-700">Tryb: Bridge-only</span>
+              <span className="ml-2 px-2 py-1 rounded bg-gray-100 text-gray-700">Bridge: {bridgeUrl.startsWith("mock://") ? "MOCK" : "REMOTE"}</span>
+            </div>
+          </div>
 
           <div className="mb-4">
             <div className="text-sm text-gray-500 mb-1">Połączenie z backendem (WebSocket)</div>
@@ -328,7 +375,7 @@ const ScaleMonitor: React.FC = () => {
               <button onClick={() => sendCommand("tare")} className="px-3 py-1 bg-yellow-500 text-white rounded">Tare</button>
               <button onClick={() => sendCommand("zero")} className="px-3 py-1 bg-orange-500 text-white rounded">Zero</button>
             </div>
-            <div className="mt-2 text-xs text-gray-500">Uwaga: komendy trafiają bezpośrednio do bridge'a HTTP.</div>
+            <div className="mt-2 text-xs text-gray-500">Uwaga: komendy trafiają bezpośrednio do bridge'a HTTP (lub do lokalnego mocka jeśli włączony).</div>
           </div>
 
           <div className="mt-6 text-right">
@@ -339,11 +386,16 @@ const ScaleMonitor: React.FC = () => {
         <div className="w-80">
           <SettingsPanel
             wsUrl={wsUrl}
-            onChange={(newUrl) => {
+            onWsChange={(newUrl) => {
               setWsUrl(newUrl);
-              // reconnect will happen via useEffect
               addLog("info", `Zaktualizowano URL WS: ${newUrl}`);
               showSuccess("Zapisano ustawienia WebSocket");
+            }}
+            bridgeUrl={bridgeUrl}
+            onBridgeChange={(newUrl) => {
+              setBridgeUrl(newUrl);
+              addLog("info", `Zaktualizowano URL bridge: ${newUrl}`);
+              showSuccess("Zapisano ustawienia bridge");
             }}
           />
 
@@ -361,6 +413,19 @@ const ScaleMonitor: React.FC = () => {
         <div>
           <div className="mb-2 text-sm text-gray-500">Historia odczytów</div>
           <HistoryChart readings={readings} />
+        </div>
+
+        <div>
+          <CommandPanel
+            onSend={async (cmd) => {
+              await sendCommand(cmd);
+            }}
+            history={cmdHistory}
+            onClear={() => {
+              setCmdHistory([]);
+              addLog("info", "Wyczyszczono historię komend");
+            }}
+          />
         </div>
 
         <div className="flex items-center justify-between text-xs text-gray-500">
