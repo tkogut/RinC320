@@ -7,6 +7,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, Mutex};
 use tokio_tungstenite::tungstenite::Message;
+use reqwest::Client;
 
 #[derive(Serialize, Debug, Clone)]
 struct ScalePayload {
@@ -76,6 +77,9 @@ async fn main() -> Result<()> {
     // Channel to broadcast JSON strings to websocket clients
     let (tx, _rx) = broadcast::channel::<String>(64);
 
+    // Shared HTTP client for bridge calls
+    let http_client = Client::new();
+
     // Spawn background task that keeps trying to connect to NP301 and reads lines
     {
         let tx = tx.clone();
@@ -136,8 +140,9 @@ async fn main() -> Result<()> {
     while let Ok((stream, addr)) = listener.accept().await {
         let tx = tx.clone();
         let shared_tcp = shared_tcp.clone();
+        let client = http_client.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_ws_connection(stream, addr, tx, shared_tcp).await {
+            if let Err(e) = handle_ws_connection(stream, addr, tx, shared_tcp, client).await {
                 log::error!("Connection error: {}", e);
             }
         });
@@ -151,6 +156,7 @@ async fn handle_ws_connection(
     addr: SocketAddr,
     tx: broadcast::Sender<String>,
     shared_tcp: Arc<Mutex<Option<TcpStream>>>,
+    client: Client,
 ) -> Result<()> {
     log::info!("Nowe połączenie WS: {}", addr);
 
@@ -172,6 +178,7 @@ async fn handle_ws_connection(
 
     // Receive messages from ws client
     let shared_for_recv = shared_tcp.clone();
+    let tx_for_recv = tx.clone();
     let receiver_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = ws_receiver.next().await {
             match msg {
@@ -190,6 +197,7 @@ async fn handle_ws_connection(
                                     None
                                 }
                             };
+                            let mut sent_to_np301 = false;
                             if let Some(bytes) = cmd_bytes {
                                 let mut guard = shared_for_recv.lock().await;
                                 if let Some(ref mut tcp) = *guard {
@@ -197,9 +205,32 @@ async fn handle_ws_connection(
                                         log::error!("Błąd wysyłania do NP301: {}", e);
                                     } else {
                                         log::info!("Wysłano do NP301: {:?}", String::from_utf8_lossy(&bytes));
+                                        sent_to_np301 = true;
                                     }
                                 } else {
-                                    log::warn!("Brak połączenia z NP301 — komenda nie wysłana");
+                                    log::warn!("Brak połączenia z NP301 — komenda nie wysłana bezpośrednio");
+                                }
+                            }
+                            // If NP301 not available (or no direct cmd mapping), call the HTTP bridge
+                            if !sent_to_np301 {
+                                let bridge_url = "http://localhost:8080/rincmd";
+                                let payload = serde_json::json!({ "command": cmd });
+                                match client.post(bridge_url).json(&payload).send().await {
+                                    Ok(resp) => {
+                                        match resp.text().await {
+                                            Ok(text) => {
+                                                log::info!("Bridge response: {}", text);
+                                                // broadcast the bridge response so clients receive it as incoming data
+                                                let _ = tx_for_recv.send(text);
+                                            }
+                                            Err(e) => {
+                                                log::error!("Bridge response read error: {}", e);
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::error!("Bridge request error: {}", e);
+                                    }
                                 }
                             }
                         } else if v.get("ping").is_some() {
