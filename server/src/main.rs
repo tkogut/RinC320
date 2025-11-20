@@ -3,6 +3,7 @@ use futures::{SinkExt, StreamExt};
 use serde::Serialize;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::env;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, Mutex};
@@ -69,8 +70,15 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     // Address to NP301 converter (modify if needed)
-    let scale_addr = "192.168.1.254:4001";
+    let scale_addr = env::var("NP301_ADDR").unwrap_or_else(|_| "192.168.1.254:4001".to_string());
     log::info!("NP301 target address: {}", scale_addr);
+
+    // Bridge configuration
+    let bridge_url = env::var("BRIDGE_URL").unwrap_or_else(|_| "http://localhost:8080/rincmd".to_string());
+    let prefer_bridge = env::var("PREFER_BRIDGE")
+        .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false);
+    log::info!("Bridge URL: {}, prefer_bridge: {}", bridge_url, prefer_bridge);
 
     // Shared optional OwnedWriteHalf for writing to NP301
     let shared_writer: Arc<Mutex<Option<OwnedWriteHalf>>> = Arc::new(Mutex::new(None));
@@ -85,7 +93,7 @@ async fn main() -> Result<()> {
     {
         let tx = tx.clone();
         let shared_writer = shared_writer.clone();
-        let scale_addr = scale_addr.to_string();
+        let scale_addr = scale_addr.clone();
         tokio::spawn(async move {
             loop {
                 log::info!("Próba połączenia z NP301: {}", scale_addr);
@@ -130,16 +138,20 @@ async fn main() -> Result<()> {
     }
 
     // WebSocket server
-    let ws_addr = "0.0.0.0:3001";
-    let listener = TcpListener::bind(ws_addr).await?;
+    let ws_addr = env::var("WS_ADDR").unwrap_or_else(|_| "0.0.0.0:3001".to_string());
+    let listener = TcpListener::bind(&ws_addr).await?;
     log::info!("WebSocket server listening on {}", ws_addr);
 
     while let Ok((stream, addr)) = listener.accept().await {
         let tx = tx.clone();
         let shared_writer = shared_writer.clone();
         let client = http_client.clone();
+        let bridge_url = bridge_url.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_ws_connection(stream, addr, tx, shared_writer, client).await {
+            if let Err(e) =
+                handle_ws_connection(stream, addr, tx, shared_writer, client, bridge_url, prefer_bridge)
+                    .await
+            {
                 log::error!("Connection error: {}", e);
             }
         });
@@ -154,6 +166,8 @@ async fn handle_ws_connection(
     tx: broadcast::Sender<String>,
     shared_writer: Arc<Mutex<Option<OwnedWriteHalf>>>,
     client: Client,
+    bridge_url: String,
+    prefer_bridge: bool,
 ) -> Result<()> {
     log::info!("Nowe połączenie WS: {}", addr);
 
@@ -176,6 +190,8 @@ async fn handle_ws_connection(
     // Receive messages from ws client
     let shared_for_recv = shared_writer.clone();
     let tx_for_recv = tx.clone();
+    let bridge_url_for_task = bridge_url.clone();
+    let client_for_task = client.clone();
     let receiver_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = ws_receiver.next().await {
             match msg {
@@ -183,6 +199,29 @@ async fn handle_ws_connection(
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) {
                         if let Some(cmd) = v.get("cmd").and_then(|c| c.as_str()) {
                             log::info!("Otrzymano komendę od WS: {}", cmd);
+
+                            // If prefer_bridge is set, always use bridge
+                            if prefer_bridge {
+                                let payload = serde_json::json!({ "command": cmd });
+                                match client_for_task.post(&bridge_url_for_task).json(&payload).send().await {
+                                    Ok(resp) => {
+                                        match resp.text().await {
+                                            Ok(text) => {
+                                                log::info!("Bridge response: {}", text);
+                                                let _ = tx_for_recv.send(text);
+                                            }
+                                            Err(e) => {
+                                                log::error!("Bridge response read error: {}", e);
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::error!("Bridge request error: {}", e);
+                                    }
+                                }
+                                continue;
+                            }
+
                             // Map to NP301 command bytes or sequences — adjust to your device protocol
                             let cmd_bytes = match cmd {
                                 "read_gross" => Some(b"READ:GROSS\n".to_vec()),
@@ -190,10 +229,16 @@ async fn handle_ws_connection(
                                 "tare" => Some(b"TARE\n".to_vec()),
                                 "zero" => Some(b"ZERO\n".to_vec()),
                                 other => {
-                                    log::warn!("Nieznana komenda: {}", other);
-                                    None
+                                    // If the command looks like a raw Rincmd command (e.g. "20050026:"), don't map it, send via bridge
+                                    if other.chars().all(|c| !c.is_control() && !c.is_whitespace()) && other.contains(':') {
+                                        None
+                                    } else {
+                                        log::warn!("Nieznana komenda: {}", other);
+                                        None
+                                    }
                                 }
                             };
+
                             let mut sent_to_np301 = false;
                             if let Some(bytes) = cmd_bytes {
                                 let mut guard = shared_for_recv.lock().await;
@@ -208,11 +253,11 @@ async fn handle_ws_connection(
                                     log::warn!("Brak połączenia z NP301 — komenda nie wysłana bezpośrednio");
                                 }
                             }
-                            // If NP301 not available (or no direct cmd mapping), call the HTTP bridge
+
+                            // If NP301 not available, or the command wasn't mapped for direct send, call the HTTP bridge
                             if !sent_to_np301 {
-                                let bridge_url = "http://localhost:8080/rincmd";
                                 let payload = serde_json::json!({ "command": cmd });
-                                match client.post(bridge_url).json(&payload).send().await {
+                                match client_for_task.post(&bridge_url_for_task).json(&payload).send().await {
                                     Ok(resp) => {
                                         match resp.text().await {
                                             Ok(text) => {
