@@ -6,6 +6,7 @@ import SettingsPanel from "./SettingsPanel";
 import ExportControls from "@/components/ExportControls";
 import LogsPanel from "@/components/LogsPanel";
 import CommandPanel from "@/components/CommandPanel";
+import HealthCheck from "@/components/HealthCheck";
 import type { ScaleMonitorApi } from "./useScaleMonitor";
 
 const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
@@ -112,6 +113,8 @@ const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
         </div>
 
         <div className="w-80">
+          <HealthCheck bridgeUrl={bridgeUrl} />
+
           <SettingsPanel
             wsUrl={wsUrl}
             onWsChange={(newUrl) => {
