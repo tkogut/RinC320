@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { showSuccess, showError, showLoading, dismissToast } from "@/utils/toast";
+import { showSuccess, showError } from "@/utils/toast";
 
 type Props = {
   bridgeUrl?: string; // used to derive health URL if healthUrl not provided
@@ -39,7 +39,6 @@ const HealthCheck: React.FC<Props> = ({ bridgeUrl, healthUrl, pollIntervalMs = D
   const [bodySnippet, setBodySnippet] = React.useState<string | null>(null);
   const [lastChecked, setLastChecked] = React.useState<number | null>(null);
   const [polling, setPolling] = React.useState(false);
-  const [isStarting, setIsStarting] = React.useState(false);
 
   const effectiveUrl = deriveHealthUrl(bridgeUrl, healthUrl);
 
@@ -133,42 +132,6 @@ const HealthCheck: React.FC<Props> = ({ bridgeUrl, healthUrl, pollIntervalMs = D
     showSuccess("Stopped health polling");
   }, [polling]);
 
-  const handleStartBridge = React.useCallback(async () => {
-    setIsStarting(true);
-    const toastId = showLoading("Próba uruchomienia bridge'a...");
-
-    try {
-      let startUrl = '/api/start-bridge'; // Domyślnie użyj ścieżki dla proxy
-      
-      // Jeśli URL do health checka jest absolutny, stwórz z niego URL do uruchomienia
-      if (effectiveUrl.startsWith('http')) {
-        const u = new URL(effectiveUrl);
-        startUrl = `${u.origin}/start-bridge`;
-      }
-
-      const res = await fetch(startUrl, {
-        method: "POST",
-      });
-
-      dismissToast(toastId);
-
-      if (res.ok) {
-        showSuccess("Wysłano polecenie uruchomienia bridge'a. Sprawdzam status za 2s...");
-        setTimeout(() => {
-          doCheck(false);
-        }, 2000);
-      } else {
-        const errorText = await res.text().catch(() => "Nieznany błąd serwera");
-        showError(`Nie udało się uruchomić bridge'a: ${res.status} ${errorText}`);
-      }
-    } catch (e: any) {
-      dismissToast(toastId);
-      showError(`Błąd sieci podczas próby uruchomienia bridge'a: ${e.message}`);
-    } finally {
-      setIsStarting(false);
-    }
-  }, [effectiveUrl, doCheck]);
-
   return (
     <div className="mb-4 p-3 border rounded bg-white">
       <div className="flex items-start justify-between">
@@ -195,7 +158,6 @@ const HealthCheck: React.FC<Props> = ({ bridgeUrl, healthUrl, pollIntervalMs = D
         <button
           onClick={() => doCheck(false)}
           className="px-3 py-1 bg-indigo-600 text-white rounded text-sm"
-          disabled={isStarting}
         >
           Check Now
         </button>
@@ -205,7 +167,6 @@ const HealthCheck: React.FC<Props> = ({ bridgeUrl, healthUrl, pollIntervalMs = D
             else startPolling();
           }}
           className={`px-3 py-1 rounded text-sm ${polling ? "bg-red-500 text-white" : "bg-gray-200 text-gray-800"}`}
-          disabled={isStarting}
         >
           {polling ? "Stop Polling" : "Start Polling"}
         </button>
@@ -220,23 +181,20 @@ const HealthCheck: React.FC<Props> = ({ bridgeUrl, healthUrl, pollIntervalMs = D
             });
           }}
           className="px-2 py-1 bg-gray-100 rounded text-sm"
-          disabled={isStarting}
         >
           Copy
         </button>
-        {(status === "unhealthy" || status === "error") && (
-          <button
-            onClick={handleStartBridge}
-            disabled={isStarting}
-            className="px-3 py-1 bg-green-600 text-white rounded text-sm disabled:bg-green-300"
-          >
-            {isStarting ? "Uruchamianie..." : "Uruchom Bridge"}
-          </button>
-        )}
       </div>
-      {(status === "unhealthy" || status === "error") && (
-        <div className="mt-2 text-xs text-gray-500">
-          Jeśli bridge nie jest uruchomiony, możesz spróbować go włączyć. Wymaga to odpowiedniej konfiguracji backendu.
+      {status === "error" && (
+        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
+          <div className="text-sm font-medium text-red-800">Bridge jest niedostępny</div>
+          <p className="mt-1 text-xs text-red-700">
+            Wygląda na to, że serwer bridge'a nie jest uruchomiony. Otwórz terminal w folderze projektu
+            i uruchom go komendą:
+          </p>
+          <pre className="mt-2 p-2 bg-gray-800 text-white rounded text-xs font-mono">
+            node bridge.js
+          </pre>
         </div>
       )}
     </div>
