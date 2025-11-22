@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import HistoryChart from "./HistoryChart";
+import HistoryChart from "@/components/HistoryChart";
 import SettingsPanel from "./SettingsPanel";
 import ExportControls from "@/components/ExportControls";
 import LogsPanel from "@/components/LogsPanel";

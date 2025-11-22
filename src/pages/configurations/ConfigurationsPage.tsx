@@ -1,11 +1,30 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Monitor, Edit, ToggleRight, ToggleLeft } from "lucide-react";
+import type { ScaleConfig } from "@/types";
+import { Badge } from "@/components/ui/badge";
 
 const ConfigurationsPage = () => {
   // Mock data for now
-  const configurations = [];
+  const configurations: ScaleConfig[] = [
+    {
+      id: "waga-magazynowa-1",
+      name: "Waga Magazynowa 1",
+      connectionType: "tcp",
+      address: "192.168.1.100:3001",
+      protocol: "rinstrum_c320",
+      isEnabled: true,
+    },
+    {
+      id: "waga-lab-2",
+      name: "Waga Laboratoryjna",
+      connectionType: "serial",
+      address: "COM3",
+      protocol: "generic_ascii",
+      isEnabled: false,
+    },
+  ];
 
   return (
     <div className="min-h-screen p-6 bg-gray-50">
@@ -45,8 +64,32 @@ const ConfigurationsPage = () => {
                   </p>
                 </div>
               ) : (
-                <div>
-                  {/* TODO: Render list of configurations here */}
+                <div className="space-y-4">
+                  {configurations.map((config) => (
+                    <div key={config.id} className="flex items-center justify-between p-4 border rounded-lg bg-white">
+                      <div className="flex items-center gap-4">
+                        {config.isEnabled ? <ToggleRight className="h-6 w-6 text-green-500" /> : <ToggleLeft className="h-6 w-6 text-gray-400" />}
+                        <div>
+                          <h3 className="font-semibold">{config.name}</h3>
+                          <p className="text-sm text-gray-500">
+                            {config.address}
+                            <Badge variant="outline" className="ml-2">{config.protocol}</Badge>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/monitor/${config.id}`}>
+                            <Monitor className="mr-2 h-4 w-4" />
+                            Monitoruj
+                          </Link>
+                        </Button>
+                        <Button variant="ghost" size="icon">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>

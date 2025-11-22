@@ -19,3 +19,19 @@ export interface ScaleConfig {
   protocol: Protocol;
   isEnabled: boolean;
 }
+
+// Types for monitoring data
+export type Reading = { ts: number; weight: number | null };
+
+export type LogEntry = {
+  ts: number;
+  level?: "info" | "warn" | "error";
+  message: string;
+};
+
+export type CmdEntry = {
+  ts: number;
+  cmd: string;
+  status: "sent" | "ok" | "error";
+  resp?: string;
+};

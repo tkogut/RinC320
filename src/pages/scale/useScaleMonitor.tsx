@@ -2,6 +2,7 @@
 
 import React from "react";
 import { showSuccess, showError } from "@/utils/toast";
+import type { Reading, LogEntry, CmdEntry } from "@/types";
 
 type ScaleMessage = {
   weight?: number;
@@ -22,21 +23,6 @@ const HISTORY_LIMIT = 200;
 const LOG_LIMIT = 500;
 const CMD_HISTORY_LIMIT = 100;
 const CONTINUOUS_INTERVAL_MS = 1000;
-
-export type LogEntry = {
-  ts: number;
-  level?: "info" | "warn" | "error";
-  message: string;
-};
-
-export type CmdEntry = {
-  ts: number;
-  cmd: string;
-  status: "sent" | "ok" | "error";
-  resp?: string;
-};
-
-export type Reading = { ts: number; weight: number | null };
 
 export type ScaleMonitorApi = {
   // state
@@ -507,7 +493,7 @@ export function useScaleMonitor(): ScaleMonitorApi {
   }, [sendCommand, bridgeUrl]);
 
   // Continuous read control: use recursive setTimeout to avoid overlap and keep latest sendCommand via ref
-  const startContinuousRead = React.useCallback(() => {
+  const startContinuousRead = React. useCallback(() => {
     if (continuousControl.current.running) return;
     continuousControl.current.running = true;
     setContinuousActive(true);
