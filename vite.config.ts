@@ -6,7 +6,15 @@ import path from "path";
 export default defineConfig(() => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 5173, // Zmieniono port na 5173, aby uniknąć konfliktu z backendem
+    proxy: {
+      // Proxy dla zapytań do /api, aby ominąć problemy z CORS w środowisku deweloperskim
+      '/api': {
+        target: 'http://localhost:8080', // Adres Twojego backendu w Rust
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
   },
   plugins: [dyadComponentTagger(), react()],
   resolve: {

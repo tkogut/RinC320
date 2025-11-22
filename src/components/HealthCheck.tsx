@@ -16,14 +16,20 @@ const REQUEST_TIMEOUT_MS = 5000;
 
 function deriveHealthUrl(bridgeUrl?: string, override?: string) {
   if (override) return override;
-  if (!bridgeUrl) return "http://localhost:8080/health";
+  if (!bridgeUrl) return "/api/health";
+
+  // Handle proxied path
+  if (bridgeUrl.startsWith('/api')) {
+    return '/api/health';
+  }
+
   try {
     // If bridgeUrl is a normal http(s) URL, use its origin + /health
     const u = new URL(bridgeUrl);
     return `${u.origin}/health`;
   } catch {
     // fallback
-    return "http://localhost:8080/health";
+    return "/api/health";
   }
 }
 
@@ -132,8 +138,13 @@ const HealthCheck: React.FC<Props> = ({ bridgeUrl, healthUrl, pollIntervalMs = D
     const toastId = showLoading("Próba uruchomienia bridge'a...");
 
     try {
-      const u = new URL(effectiveUrl);
-      const startUrl = `${u.origin}/start-bridge`;
+      let startUrl = '/api/start-bridge'; // Domyślnie użyj ścieżki dla proxy
+      
+      // Jeśli URL do health checka jest absolutny, stwórz z niego URL do uruchomienia
+      if (effectiveUrl.startsWith('http')) {
+        const u = new URL(effectiveUrl);
+        startUrl = `${u.origin}/start-bridge`;
+      }
 
       const res = await fetch(startUrl, {
         method: "POST",

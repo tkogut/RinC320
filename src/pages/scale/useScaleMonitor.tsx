@@ -11,7 +11,7 @@ type ScaleMessage = {
 };
 
 const DEFAULT_WS = "ws://localhost:3001";
-const DEFAULT_BRIDGE = "http://localhost:8080/rincmd";
+const DEFAULT_BRIDGE = "/api/rincmd"; // Zmieniono na ścieżkę względną dla proxy
 const STORAGE_KEY = "scale_ws_url";
 const BRIDGE_STORAGE_KEY = "scale_bridge_url";
 const CONTINUOUS_AUTO_KEY = "scale_continuous_auto";
