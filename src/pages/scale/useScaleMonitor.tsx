@@ -14,6 +14,7 @@ const DEFAULT_WS = "ws://localhost:3001";
 const DEFAULT_BRIDGE = "http://localhost:8080/rincmd";
 const STORAGE_KEY = "scale_ws_url";
 const BRIDGE_STORAGE_KEY = "scale_bridge_url";
+const CONTINUOUS_AUTO_KEY = "scale_continuous_auto";
 const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 const KEEPALIVE_INTERVAL_MS = 20_000;
@@ -50,9 +51,11 @@ export type ScaleMonitorApi = {
   wsUrl: string;
   bridgeUrl: string;
   continuousActive: boolean;
+  continuousAutoEnabled: boolean;
   // actions
   setWsUrl: (s: string) => void;
   setBridgeUrl: (s: string) => void;
+  setContinuousAutoEnabled: (v: boolean) => void;
   connect: () => void;
   disconnect: (manual?: boolean) => void;
   sendCommand: (cmd: string) => Promise<void>;
@@ -73,6 +76,15 @@ export function useScaleMonitor(): ScaleMonitorApi {
   const [logs, setLogs] = React.useState<LogEntry[]>([]);
   const [cmdHistory, setCmdHistory] = React.useState<CmdEntry[]>([]);
   const [continuousActive, setContinuousActive] = React.useState(false);
+
+  // auto-start continuous read persisted flag
+  const [continuousAutoEnabled, setContinuousAutoEnabledState] = React.useState<boolean>(() => {
+    try {
+      return localStorage.getItem(CONTINUOUS_AUTO_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   const wsRef = React.useRef<WebSocket | null>(null);
   const reconnectAttempt = React.useRef(0);
@@ -122,6 +134,14 @@ export function useScaleMonitor(): ScaleMonitorApi {
       // ignore
     }
   }, [bridgeUrl]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(CONTINUOUS_AUTO_KEY, continuousAutoEnabled ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [continuousAutoEnabled]);
 
   const addLog = (level: LogEntry["level"], message: string) => {
     setLogs((prev) => {
@@ -334,9 +354,6 @@ export function useScaleMonitor(): ScaleMonitorApi {
         stopKeepalive();
         addLog("warn", "Połączenie WebSocket zamknięte");
 
-        // Only stop continuous read when disconnect was requested manually by the user.
-        // If the close was due to network/remote error, keep continuous reading active
-        // (it may still work via the bridge). The reconnect logic will run for non-manual closes.
         if (manualDisconnect.current) {
           clearContinuousLoop();
           showError("Połączenie WebSocket rozłączone ręcznie");
@@ -527,15 +544,21 @@ export function useScaleMonitor(): ScaleMonitorApi {
     showSuccess("Ciągły odczyt Gross zatrzymany");
   }, []);
 
-  // Auto-connect on mount and whenever wsUrl changes (restart connection)
+  // Auto-start continuous read when the persisted flag is enabled
   React.useEffect(() => {
-    connect();
+    if (continuousAutoEnabled) {
+      startContinuousRead();
+    }
     return () => {
-      manualDisconnect.current = true;
-      disconnect(true);
+      // cleanup continuous loop on unmount
+      clearContinuousLoop();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wsUrl]);
+    // we intentionally depend on the flag and startContinuousRead
+  }, [continuousAutoEnabled, startContinuousRead]);
+
+  // NOTE: Auto-connect on mount / wsUrl change was removed intentionally.
+  // The UI no longer provides Connect/Disconnect controls; connections can be manually
+  // triggered by calling connect() from elsewhere if needed.
 
   const clearReadings = () => {
     setReadings([]);
@@ -551,6 +574,7 @@ export function useScaleMonitor(): ScaleMonitorApi {
 
   const setWsUrl = (s: string) => setWsUrlState(s);
   const setBridgeUrl = (s: string) => setBridgeUrlState(s);
+  const setContinuousAutoEnabled = (v: boolean) => setContinuousAutoEnabledState(v);
 
   return {
     connected,
@@ -564,8 +588,10 @@ export function useScaleMonitor(): ScaleMonitorApi {
     wsUrl,
     bridgeUrl,
     continuousActive,
+    continuousAutoEnabled,
     setWsUrl,
     setBridgeUrl,
+    setContinuousAutoEnabled,
     connect,
     disconnect,
     sendCommand,

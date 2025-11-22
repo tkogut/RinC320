@@ -12,7 +12,7 @@ import type { ScaleMonitorApi } from "./useScaleMonitor";
 
 const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
   const {
-    connected,
+    // removed connect/disconnect usage from UI (still present in hook if needed)
     weight,
     unit,
     status,
@@ -22,8 +22,7 @@ const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
     cmdHistory,
     wsUrl,
     bridgeUrl,
-    connect,
-    disconnect,
+    // actions
     sendCommand,
     setWsUrl,
     setBridgeUrl,
@@ -33,10 +32,9 @@ const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
     continuousActive,
     startContinuousRead,
     stopContinuousRead,
+    continuousAutoEnabled,
+    setContinuousAutoEnabled,
   } = api;
-
-  // ensure continuous read is stopped when connection closes is handled in hook;
-  // UI only needs to call start/stop provided by hook.
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow">
@@ -44,56 +42,20 @@ const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
         <div className="flex-1">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-semibold mb-2">Monitor wagi Rinstrum C320</h2>
-            <div className="text-xs">
-              <span className="px-2 py-1 rounded bg-indigo-100 text-indigo-700">Tryb: Bridge-only</span>
-              <span className="ml-2 px-2 py-1 rounded bg-gray-100 text-gray-700">
-                Bridge: {bridgeUrl.startsWith("mock://") ? "MOCK" : "REMOTE"}
-              </span>
-            </div>
+            {/* Removed mode badges and bridge mode display per request */}
           </div>
 
           <div className="mb-4">
             <div className="text-sm text-gray-500 mb-1">Połączenie z backendem (WebSocket)</div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  // ensure manualDisconnect false in hook
-                  connect();
-                }}
-                disabled={connected}
-                className="px-3 py-1 bg-green-600 text-white rounded disabled:opacity-50"
-              >
-                Połącz
-              </button>
-              <button
-                onClick={() => {
-                  // stop continuous read when explicitly disconnecting
-                  stopContinuousRead();
-                  disconnect(true);
-                }}
-                disabled={!connected}
-                className="px-3 py-1 bg-red-600 text-white rounded disabled:opacity-50"
-              >
-                Rozłącz
-              </button>
-              <div
-                className={`ml-3 inline-block px-2 py-1 rounded ${
-                  connected ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
-                }`}
-              >
-                {connected ? "Połączono" : "Rozłączono"}
-              </div>
-            </div>
 
-            {/* Continuous Gross read control placed under the connect/disconnect buttons */}
+            {/* Continuous read control remains available (no longer gated by WS connection). */}
             <div className="mt-2 flex items-center gap-2">
               <button
                 onClick={() => {
                   if (!continuousActive) startContinuousRead();
                   else stopContinuousRead();
                 }}
-                disabled={!connected}
-                className={`px-3 py-1 rounded text-sm ${continuousActive ? "bg-red-500 text-white" : "bg-gray-200 text-gray-800"} ${!connected ? "opacity-50 cursor-not-allowed" : ""}`}
+                className={`px-3 py-1 rounded text-sm ${continuousActive ? "bg-red-500 text-white" : "bg-gray-200 text-gray-800"}`}
               >
                 {continuousActive ? "Stop ciągłego odczytu Gross" : "Start ciągłego odczytu Gross"}
               </button>
@@ -155,6 +117,10 @@ const ScaleMonitorView: React.FC<{ api: ScaleMonitorApi }> = ({ api }) => {
             bridgeUrl={bridgeUrl}
             onBridgeChange={(newUrl) => {
               setBridgeUrl(newUrl);
+            }}
+            continuousAutoEnabled={continuousAutoEnabled}
+            onContinuousAutoChange={(v) => {
+              setContinuousAutoEnabled(v);
             }}
           />
 

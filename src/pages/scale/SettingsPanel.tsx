@@ -7,13 +7,16 @@ type Props = {
   onWsChange: (newUrl: string) => void;
   bridgeUrl: string;
   onBridgeChange: (newUrl: string) => void;
+  continuousAutoEnabled: boolean;
+  onContinuousAutoChange: (v: boolean) => void;
 };
 
 const STORAGE_KEY = "scale_ws_url";
 const BRIDGE_STORAGE_KEY = "scale_bridge_url";
 const BRIDGE_MOCK_KEY = "scale_bridge_mock";
+const CONTINUOUS_AUTO_KEY = "scale_continuous_auto";
 
-const SettingsPanel: React.FC<Props> = ({ wsUrl, onWsChange, bridgeUrl, onBridgeChange }) => {
+const SettingsPanel: React.FC<Props> = ({ wsUrl, onWsChange, bridgeUrl, onBridgeChange, continuousAutoEnabled, onContinuousAutoChange }) => {
   const [open, setOpen] = React.useState(false);
   const [wsValue, setWsValue] = React.useState(wsUrl);
   const [bridgeValue, setBridgeValue] = React.useState(bridgeUrl);
@@ -24,6 +27,13 @@ const SettingsPanel: React.FC<Props> = ({ wsUrl, onWsChange, bridgeUrl, onBridge
       return false;
     }
   });
+  const [useContinuousAuto, setUseContinuousAuto] = React.useState<boolean>(() => {
+    try {
+      return localStorage.getItem(CONTINUOUS_AUTO_KEY) === "1";
+    } catch {
+      return continuousAutoEnabled;
+    }
+  });
 
   React.useEffect(() => {
     setWsValue(wsUrl);
@@ -32,6 +42,10 @@ const SettingsPanel: React.FC<Props> = ({ wsUrl, onWsChange, bridgeUrl, onBridge
   React.useEffect(() => {
     setBridgeValue(bridgeUrl);
   }, [bridgeUrl]);
+
+  React.useEffect(() => {
+    setUseContinuousAuto(continuousAutoEnabled);
+  }, [continuousAutoEnabled]);
 
   const save = () => {
     try {
@@ -44,8 +58,12 @@ const SettingsPanel: React.FC<Props> = ({ wsUrl, onWsChange, bridgeUrl, onBridge
     } catch (e) {
       // ignore
     }
+    try {
+      localStorage.setItem(CONTINUOUS_AUTO_KEY, useContinuousAuto ? "1" : "0");
+    } catch {}
     onWsChange(wsValue);
     onBridgeChange(bridgeValue);
+    onContinuousAutoChange(useContinuousAuto);
     setOpen(false);
   };
 
@@ -68,6 +86,14 @@ const SettingsPanel: React.FC<Props> = ({ wsUrl, onWsChange, bridgeUrl, onBridge
     } catch (e) {
       // ignore
     }
+    try {
+      const c = localStorage.getItem(CONTINUOUS_AUTO_KEY);
+      if (c) {
+        const enabled = c === "1";
+        setUseContinuousAuto(enabled);
+        onContinuousAutoChange(enabled);
+      }
+    } catch {}
     setOpen(false);
   };
 
@@ -144,6 +170,16 @@ const SettingsPanel: React.FC<Props> = ({ wsUrl, onWsChange, bridgeUrl, onBridge
             <label htmlFor="mock-bridge" className="text-xs text-gray-600">Użyj mock bridge (frontend)</label>
           </div>
 
+          <div className="flex items-center gap-2">
+            <input
+              id="auto-continuous"
+              type="checkbox"
+              checked={useContinuousAuto}
+              onChange={(e) => setUseContinuousAuto(e.target.checked)}
+            />
+            <label htmlFor="auto-continuous" className="text-xs text-gray-600">Auto-start ciągłego odczytu przy starcie</label>
+          </div>
+
           <div className="flex gap-2 justify-end">
             <button
               onClick={restoreFromStorage}
@@ -155,6 +191,7 @@ const SettingsPanel: React.FC<Props> = ({ wsUrl, onWsChange, bridgeUrl, onBridge
               onClick={() => {
                 setWsValue(wsUrl);
                 setBridgeValue(bridgeUrl);
+                setUseContinuousAuto(continuousAutoEnabled);
                 setOpen(false);
               }}
               className="px-3 py-1 bg-red-500 text-white rounded text-sm"
@@ -173,6 +210,7 @@ const SettingsPanel: React.FC<Props> = ({ wsUrl, onWsChange, bridgeUrl, onBridge
         <div className="mt-2 text-sm text-gray-600">
           <div>Aktualny WS: {wsUrl}</div>
           <div className="mt-1">Bridge: {bridgeUrl}</div>
+          <div className="mt-1">Auto-start ciągłego odczytu: {useContinuousAuto ? "Tak" : "Nie"}</div>
         </div>
       )}
     </div>
