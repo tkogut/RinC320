@@ -7,7 +7,6 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import RinstrumMonitorPage from "./pages/RinstrumMonitorPage";
 import ConfigurationsPage from "./pages/configurations/ConfigurationsPage";
-import NewConfigurationPage from "./pages/configurations/NewConfigurationPage";
 import MonitorPage from "./pages/monitor/MonitorPage";
 import MainLayout from "./components/layout/MainLayout";
 import DevicesPage from "./pages/devices/DevicesPage";
@@ -23,7 +22,6 @@ const AppRoutes = () => (
     <Route path="/monitor/rinstrum" element={<RinstrumMonitorPage />} />
     <Route path="/monitor/:configId" element={<MonitorPage />} />
     <Route path="/configurations" element={<ConfigurationsPage />} />
-    <Route path="/configurations/new" element={<NewConfigurationPage />} />
     <Route path="/devices" element={<DevicesPage />} />
     <Route path="/hosts" element={<HostsPage />} />
     <Route path="/groups" element={<GroupsPage />} />
