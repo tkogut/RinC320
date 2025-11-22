@@ -14,26 +14,35 @@ const Index = () => {
           </p>
         </header>
 
-        <main>
+        <main className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Konfiguracje Wag</CardTitle>
+              <CardTitle>Zarządzanie Konfiguracjami</CardTitle>
               <CardDescription>
-                Tutaj w przyszłości pojawi się lista skonfigurowanych wag.
+                Dodawaj, edytuj i zarządzaj połączeniami z wagami.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="p-8 text-center text-gray-500 border-2 border-dashed rounded-lg">
-                Lista konfiguracji wag jest w budowie.
-              </div>
-              <div className="mt-4">
-                <p className="text-sm text-gray-600 mb-2">
-                  Na razie możesz przejść do istniejącego monitora dla wagi Rinstrum C320.
-                </p>
-                <Button asChild>
-                  <Link to="/monitor/rinstrum">Przejdź do monitora Rinstrum</Link>
-                </Button>
-              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Przejdź do panelu konfiguracji, aby zdefiniować nowe połączenia z wagami lub zarządzać istniejącymi.
+              </p>
+              <Button asChild>
+                <Link to="/configurations">Zarządzaj Konfiguracjami</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gray-50 border-dashed">
+            <CardHeader>
+              <CardTitle>Monitor Rinstrum C320 (Legacy)</CardTitle>
+              <CardDescription>
+                Bezpośredni dostęp do poprzedniego, statycznie skonfigurowanego monitora.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="secondary" asChild>
+                <Link to="/monitor/rinstrum">Przejdź do monitora Rinstrum</Link>
+              </Button>
             </CardContent>
           </Card>
         </main>
