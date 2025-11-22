@@ -101,6 +101,11 @@ const HealthCheck: React.FC<Props> = ({ bridgeUrl, healthUrl, pollIntervalMs = D
   }, [effectiveUrl]);
 
   React.useEffect(() => {
+    // Run a check on mount to get initial status
+    doCheck(true);
+  }, [doCheck]);
+
+  React.useEffect(() => {
     return () => {
       // cleanup on unmount
       controllerRef.current?.abort();
