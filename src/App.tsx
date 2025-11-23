@@ -16,6 +16,7 @@ import MonitorPage from "./pages/monitor/MonitorPage";
 import ComingSoonPage from "./pages/ComingSoonPage";
 import NotFound from "./pages/NotFound";
 import PrintersPage from "./pages/printers/PrintersPage";
+import IndicationsPage from "./pages/indications/IndicationsPage";
 
 const queryClient = new QueryClient();
 
@@ -43,7 +44,7 @@ const App = () => (
               <Route path="/groups" element={<GroupsPage />} />
 
               {/* Other top-level items */}
-              <Route path="/scales-indications" element={<ComingSoonPage />} />
+              <Route path="/scales-indications" element={<IndicationsPage />} />
               <Route path="/weighing-list" element={<ComingSoonPage />} />
               <Route path="/pins" element={<ComingSoonPage />} />
 
