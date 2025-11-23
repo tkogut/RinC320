@@ -68,7 +68,8 @@ const ConfigurationsPage = () => {
                   <TableRow>
                     <TableHead>Nazwa Wagi</TableHead>
                     <TableHead>Host (Konwerter)</TableHead>
-                    <TableHead>Protokół</TableHead>
+                    <TableHead>Model</TableHead>
+                    <TableHead>Typ Połączenia</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Akcje</TableHead>
                   </TableRow>
@@ -79,7 +80,10 @@ const ConfigurationsPage = () => {
                       <TableCell className="font-medium">{config.name}</TableCell>
                       <TableCell>{getHostName(config.hostId)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{config.protocol}</Badge>
+                        <Badge variant="secondary">{config.model || "Brak"}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{config.connectionType?.toUpperCase()}</Badge>
                       </TableCell>
                       <TableCell>
                         <StatusBadge isActive={config.isEnabled} />
