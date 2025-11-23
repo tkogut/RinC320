@@ -10,6 +10,7 @@ import HealthCheck from "@/components/HealthCheck";
 import { showSuccess } from "@/utils/toast";
 import type { Reading, LogEntry, CmdEntry } from "@/types";
 import { Play, Square } from "lucide-react";
+import type { ProtocolCommands } from "@/config/protocols";
 
 type MonitorViewProps = {
   scaleName: string;
@@ -23,6 +24,7 @@ type MonitorViewProps = {
   bridgeUrl: string;
   healthUrl?: string;
   isPolling: boolean;
+  commands: ProtocolCommands | null;
   onSendCommand: (cmd: string) => Promise<void>;
   onClearReadings: () => void;
   onClearLogs: () => void;
@@ -43,6 +45,7 @@ const MonitorView: React.FC<MonitorViewProps> = ({
   bridgeUrl,
   healthUrl,
   isPolling,
+  commands,
   onSendCommand,
   onClearReadings,
   onClearLogs,
@@ -88,9 +91,9 @@ const MonitorView: React.FC<MonitorViewProps> = ({
             <div className="p-4 bg-white rounded-lg shadow">
               <div className="text-sm font-medium text-gray-700 mb-3">Szybkie akcje</div>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => onSendCommand("TARE")}>Taruj</Button>
-                <Button onClick={() => onSendCommand("ZERO")}>Zeruj</Button>
-                <Button variant="secondary" onClick={() => onSendCommand("READ")}>Odczyt jednorazowy</Button>
+                <Button onClick={() => commands && onSendCommand(commands.tare)} disabled={!commands}>Taruj</Button>
+                <Button onClick={() => commands && onSendCommand(commands.zero)} disabled={!commands}>Zeruj</Button>
+                <Button variant="secondary" onClick={() => commands && onSendCommand(commands.read)} disabled={!commands}>Odczyt jednorazowy</Button>
               </div>
             </div>
 

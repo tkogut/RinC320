@@ -4,6 +4,7 @@ import { useAppContext } from "@/context/AppContext";
 import MonitorView from "./MonitorView";
 import { useAppScaleMonitor } from "@/hooks/useAppScaleMonitor";
 import { MadeWithDyad } from "@/components/made-with-dyad";
+import { protocolCommands } from "@/config/protocols";
 
 const MonitorPage = () => {
   const { configId } = useParams<{ configId: string }>();
@@ -28,6 +29,7 @@ const MonitorPage = () => {
   }
 
   const healthUrl = `/api/health?ip=${host.ipAddress}&port=${host.port}`;
+  const commands = protocolCommands[config.protocol];
 
   return (
     <div className="min-h-screen p-6 bg-gray-50">
@@ -43,6 +45,7 @@ const MonitorPage = () => {
         bridgeUrl={`http://${host.ipAddress}:${host.port}`}
         healthUrl={healthUrl}
         isPolling={isPolling}
+        commands={commands}
         onSendCommand={sendCommand}
         onClearReadings={clearReadings}
         onClearLogs={clearLogs}

@@ -3,6 +3,7 @@
 import React from "react";
 import { showSuccess, showError } from "@/utils/toast";
 import type { Reading, LogEntry, CmdEntry, Host, Protocol } from "@/types";
+import { protocolCommands } from "@/config/protocols";
 
 const HISTORY_LIMIT = 200;
 const LOG_LIMIT = 500;
@@ -160,7 +161,10 @@ export function useAppScaleMonitor(host: Host | null, protocol: Protocol | undef
     showSuccess("Ciągły odczyt rozpoczęty");
 
     const getReadCommand = () => {
-      if (protocol === 'rinstrum_c320') return "20050026:";
+      if (protocol) {
+        return protocolCommands[protocol].read;
+      }
+      // Fallback for safety, though protocol should always be defined
       return "READ";
     };
 
