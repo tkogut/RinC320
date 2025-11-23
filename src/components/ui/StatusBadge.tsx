@@ -1,20 +1,25 @@
-import { CheckCircle2, XCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import React from 'react';
+import { cn } from '@/lib/utils';
 
 type StatusBadgeProps = {
   isActive: boolean;
+  className?: string;
 };
 
-const StatusBadge = ({ isActive }: StatusBadgeProps) => {
-  const baseClasses = "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold text-white";
-  const activeClasses = "bg-success-green";
-  const inactiveClasses = "bg-danger-red";
+const StatusBadge: React.FC<StatusBadgeProps> = ({ isActive, className }) => {
+  const statusText = isActive ? 'Aktywny' : 'Nieaktywny';
+  const badgeColor = isActive ? 'bg-success-green' : 'bg-gray-400';
 
   return (
-    <div className={cn(baseClasses, isActive ? activeClasses : inactiveClasses)}>
-      {isActive ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-      <span>{isActive ? "Aktywny" : "Nieaktywny"}</span>
-    </div>
+    <span
+      className={cn(
+        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white',
+        badgeColor,
+        className
+      )}
+    >
+      {statusText}
+    </span>
   );
 };
 
