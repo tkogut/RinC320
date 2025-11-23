@@ -1,13 +1,15 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, Monitor, Edit, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { PlusCircle, Monitor, Edit, Trash2, Search } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import ScaleForm from "./ScaleForm";
 import { useAppContext } from "@/context/AppContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import StatusBadge from "@/components/ui/StatusBadge";
+import { Badge } from "@/components/ui/badge";
 
 const ConfigurationsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -19,47 +21,46 @@ const ConfigurationsPage = () => {
   };
 
   return (
-    <div>
-      <header className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-4xl font-bold mb-2">Konfiguracje Wag</h1>
-          <p className="text-gray-600">
-            Zarządzaj połączeniami z wagami pomiarowymi.
-          </p>
+    <div className="space-y-6">
+      <header className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-text-dark">Konfiguracje Wag</h1>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+            <Input
+              type="search"
+              placeholder="Szukaj..."
+              className="w-full rounded-lg bg-white pl-8 md:w-[200px] lg:w-[336px]"
+            />
+          </div>
+          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Dodaj konfigurację
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px] h-[90vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle>Szczegóły wagi</DialogTitle>
+                <DialogDescription>
+                  Wprowadź szczegóły konfiguracji dla nowej wagi.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex-grow overflow-hidden">
+                <ScaleForm setModalOpen={setIsModalOpen} />
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Dodaj nową konfigurację
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] h-[90vh] flex flex-col">
-            <DialogHeader>
-              <DialogTitle>Szczegóły wagi</DialogTitle>
-              <DialogDescription>
-                Wprowadź szczegóły konfiguracji dla nowej wagi.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex-grow overflow-hidden">
-              <ScaleForm setModalOpen={setIsModalOpen} />
-            </div>
-          </DialogContent>
-        </Dialog>
       </header>
 
       <main>
         <Card>
-          <CardHeader>
-            <CardTitle>Lista Konfiguracji</CardTitle>
-            <CardDescription>
-              Lista wszystkich zdefiniowanych połączeń z wagami.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {configurations.length === 0 ? (
-              <div className="p-8 text-center text-gray-500 border-2 border-dashed rounded-lg">
-                <p>Brak zdefiniowanych konfiguracji. Najpierw dodaj konfigurację.</p>
+              <div className="p-8 text-center text-gray-500">
+                <p>Brak zdefiniowanych konfiguracji. Kliknij "Dodaj konfigurację", aby rozpocząć.</p>
               </div>
             ) : (
               <Table>
@@ -74,28 +75,25 @@ const ConfigurationsPage = () => {
                 </TableHeader>
                 <TableBody>
                   {configurations.map((config) => (
-                    <TableRow key={config.id}>
+                    <TableRow key={config.id} className="hover:bg-gray-100 even:bg-gray-50/50">
                       <TableCell className="font-medium">{config.name}</TableCell>
                       <TableCell>{getHostName(config.hostId)}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{config.protocol}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={config.isEnabled ? "default" : "outline"}>
-                          {config.isEnabled ? "Włączona" : "Wyłączona"}
-                        </Badge>
+                        <StatusBadge isActive={config.isEnabled} />
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="outline" size="sm" asChild>
+                      <TableCell className="text-right space-x-1">
+                        <Button variant="ghost" size="icon" className="text-accent-cyan hover:bg-accent-cyan/10 hover:text-accent-cyan" asChild>
                           <Link to={`/monitor/${config.id}`}>
-                            <Monitor className="mr-2 h-4 w-4" />
-                            Monitoruj
+                            <Monitor className="h-4 w-4" />
                           </Link>
                         </Button>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" className="text-success-green hover:bg-success-green/10 hover:text-success-green">
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600">
+                        <Button variant="ghost" size="icon" className="text-danger-red hover:bg-danger-red/10 hover:text-danger-red">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
