@@ -1,3 +1,4 @@
+import React from "react";
 import { useParams } from "react-router-dom";
 import { useAppContext } from "@/context/AppContext";
 import MonitorView from "./MonitorView";

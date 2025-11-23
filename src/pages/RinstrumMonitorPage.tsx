@@ -1,3 +1,4 @@
+import React from "react";
 import ScaleMonitor from "./scale/ScaleMonitor";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 

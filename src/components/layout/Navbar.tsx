@@ -1,3 +1,4 @@
+import React from "react";
 import { Menu, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
