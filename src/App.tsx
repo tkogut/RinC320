@@ -39,7 +39,7 @@ const App = () => (
               {/* I/O Sub-category */}
               <Route path="/io" element={<DevicesPage />} />
               <Route path="/group-templates" element={<TemplatesPage />} />
-              <Route path="/groups" in element={<GroupsPage />} />
+              <Route path="/groups" element={<GroupsPage />} />
 
               {/* Other top-level items */}
               <Route path="/scales-indications" element={<ComingSoonPage />} />
