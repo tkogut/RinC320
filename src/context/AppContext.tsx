@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
-import type { Host, ScaleConfig, IoDevice, Printer, WeighingRecord } from '@/types';
+import type { Host, ScaleConfig, IoDevice, Printer, WeighingRecord, IoGroup } from '@/types';
 
 interface AppContextType {
   hosts: Host[];
@@ -18,6 +18,10 @@ interface AppContextType {
   addPrinter: (printer: Omit<Printer, 'id'>) => void;
   updatePrinter: (id: string, updatedPrinter: Omit<Printer, 'id'>) => void;
   deletePrinter: (id: string) => void;
+  groups: IoGroup[];
+  addGroup: (group: Omit<IoGroup, 'id'>) => void;
+  updateGroup: (id: string, updatedGroup: Omit<IoGroup, 'id'>) => void;
+  deleteGroup: (id: string) => void;
   weighings: WeighingRecord[];
   addWeighing: (weighing: Omit<WeighingRecord, 'id' | 'timestamp'>) => void;
   deleteWeighing: (id: string) => void;
@@ -30,6 +34,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [configurations, setConfigurations] = useState<ScaleConfig[]>([]);
   const [devices, setDevices] = useState<IoDevice[]>([]);
   const [printers, setPrinters] = useState<Printer[]>([]);
+  const [groups, setGroups] = useState<IoGroup[]>([]);
   const [weighings, setWeighings] = useState<WeighingRecord[]>([]);
 
   const addHost = (hostData: Omit<Host, 'id'>) => {
@@ -84,6 +89,19 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setPrinters(prev => prev.filter(printer => printer.id !== id));
   };
 
+  const addGroup = (groupData: Omit<IoGroup, 'id'>) => {
+    const newGroup: IoGroup = { id: crypto.randomUUID(), ...groupData };
+    setGroups(prev => [...prev, newGroup]);
+  };
+
+  const updateGroup = (id: string, updatedGroupData: Omit<IoGroup, 'id'>) => {
+    setGroups(prev => prev.map(group => group.id === id ? { id, ...updatedGroupData } : group));
+  };
+
+  const deleteGroup = (id: string) => {
+    setGroups(prev => prev.filter(group => group.id !== id));
+  };
+
   const addWeighing = (weighingData: Omit<WeighingRecord, 'id' | 'timestamp'>) => {
     const newWeighing: WeighingRecord = { 
       id: crypto.randomUUID(), 
@@ -103,6 +121,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       configurations, addConfiguration, updateConfiguration, deleteConfiguration, 
       devices, addDevice, updateDevice, deleteDevice,
       printers, addPrinter, updatePrinter, deletePrinter,
+      groups, addGroup, updateGroup, deleteGroup,
       weighings, addWeighing, deleteWeighing
     }}>
       {children}

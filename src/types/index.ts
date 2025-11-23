@@ -46,6 +46,13 @@ export interface Printer {
   hostId: string;
 }
 
+export interface IoGroup {
+  id: string;
+  name: string;
+  description?: string;
+  deviceId: string; // Link to an IoDevice
+}
+
 export interface WeighingRecord {
   id: string;
   scaleId: string;
