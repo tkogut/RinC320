@@ -29,12 +29,19 @@ import type { Protocol } from "@/types";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Nazwa musi mieć co najmniej 2 znaki." }),
+  groupId: z.string().optional(),
   description: z.string().optional(),
   hostId: z.string({ required_error: "Musisz wybrać hosta." }),
-  protocol: z.enum(["rinstrum_c320", "generic_ascii"]),
-  isEnabled: z.boolean().default(true),
+  department: z.string().optional(),
+  printerId: z.string().optional(),
+  groupMeasurements: z.boolean().default(false),
+  measurementUnit: z.enum(['kg', 'g', 't']),
   model: z.string().optional(),
   measurementRegex: z.string().optional(),
+  communicationMode: z.enum(['continuous', 'on_demand']),
+  connectionType: z.enum(['tcp', 'serial']),
+  isEnabled: z.boolean().default(true),
+  protocol: z.enum(["rinstrum_c320", "generic_ascii"]),
 });
 
 type ScaleFormProps = {
@@ -50,6 +57,10 @@ const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
       description: "",
       protocol: "rinstrum_c320",
       isEnabled: true,
+      groupMeasurements: false,
+      measurementUnit: 'kg',
+      communicationMode: 'on_demand',
+      connectionType: 'tcp',
     },
   });
 
@@ -77,6 +88,22 @@ const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
             />
             <FormField
               control={form.control}
+              name="groupId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Grupy</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Wybierz grupy" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="disabled" disabled>Brak zdefiniowanych grup</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="description"
               render={({ field }) => (
                 <FormItem>
@@ -91,7 +118,7 @@ const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
               name="hostId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Host (Konwerter)</FormLabel>
+                  <FormLabel>Host</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Wybierz hosta" /></SelectTrigger></FormControl>
                     <SelectContent>
@@ -102,22 +129,64 @@ const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
                       )}
                     </SelectContent>
                   </Select>
-                  <FormDescription>Wybierz konwerter, z którym połączy się waga.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <FormField
               control={form.control}
-              name="protocol"
+              name="department"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Protokół</FormLabel>
+                  <FormLabel>Oddział</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Wybierz oddział" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="disabled" disabled>Brak zdefiniowanych oddziałów</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="printerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Drukarka</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Wybierz drukarkę" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="disabled" disabled>Brak zdefiniowanych drukarek</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="groupMeasurements"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center space-x-3 space-y-0 pt-2">
+                  <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                  <FormLabel>Grupuj wysyłane pomiary</FormLabel>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="measurementUnit"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Jednostka pomiaru</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                     <SelectContent>
-                      <SelectItem value="rinstrum_c320">Rinstrum C320</SelectItem>
-                      <SelectItem value="generic_ascii">Generic ASCII</SelectItem>
+                      <SelectItem value="kg">kg</SelectItem>
+                      <SelectItem value="g">g</SelectItem>
+                      <SelectItem value="t">t</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -130,7 +199,13 @@ const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Model</FormLabel>
-                  <FormControl><Input placeholder="np. Rinstrum C320" {...field} /></FormControl>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Wybierz model" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                       <SelectItem value="rinstrum_c320">Rinstrum C320</SelectItem>
+                       <SelectItem value="generic_ascii">Generic ASCII</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
@@ -142,6 +217,40 @@ const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
                 <FormItem>
                   <FormLabel>Regex dla pomiaru</FormLabel>
                   <FormControl><Input placeholder="Opcjonalny regex do wyciągania wagi" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="communicationMode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tryb komunikacji</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="on_demand">Na żądanie</SelectItem>
+                      <SelectItem value="continuous">Ciągły</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="connectionType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Typ połączenia</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="tcp">TCP</SelectItem>
+                      <SelectItem value="serial">Serial</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

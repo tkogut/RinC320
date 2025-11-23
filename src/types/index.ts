@@ -12,6 +12,14 @@ export interface ScaleConfig {
   isEnabled: boolean;
   model?: string;
   measurementRegex?: string;
+  // New fields from screenshot
+  groupId?: string;
+  department?: string;
+  printerId?: string;
+  groupMeasurements?: boolean;
+  measurementUnit?: 'kg' | 'g' | 't';
+  communicationMode?: 'continuous' | 'on_demand';
+  connectionType?: ConnectionType;
 }
 
 export interface Host {
