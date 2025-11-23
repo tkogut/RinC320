@@ -15,6 +15,7 @@ import TemplatesPage from "./pages/templates/TemplatesPage";
 import MonitorPage from "./pages/monitor/MonitorPage";
 import ComingSoonPage from "./pages/ComingSoonPage";
 import NotFound from "./pages/NotFound";
+import PrintersPage from "./pages/printers/PrintersPage";
 
 const queryClient = new QueryClient();
 
@@ -34,7 +35,7 @@ const App = () => (
               <Route path="/scales" element={<ConfigurationsPage />} />
               <Route path="/scales/monitor/:configId" element={<MonitorPage />} />
               <Route path="/hosts" element={<HostsPage />} />
-              <Route path="/printers" element={<ComingSoonPage />} />
+              <Route path="/printers" element={<PrintersPage />} />
               
               {/* I/O Sub-category */}
               <Route path="/io" element={<DevicesPage />} />

@@ -39,6 +39,13 @@ export interface IoDevice {
   ipAddress: string;
 }
 
+export interface Printer {
+  id: string;
+  name: string;
+  description?: string;
+  hostId: string;
+}
+
 // Types for monitoring data
 export type Reading = { ts: number; weight: number | null };
 
