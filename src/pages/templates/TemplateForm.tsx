@@ -15,21 +15,27 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { showSuccess } from "@/utils/toast";
 import { PlusCircle, Trash2 } from "lucide-react";
-import type { IoGroupTemplate } from "@/types";
+import type { IoGroupTemplate, TemplatePin } from "@/types";
 import { useAppContext } from "@/context/AppContext";
 
-const pinSchema = z.object({
-  pinNumber: z.coerce.number().int().min(1, "Pin musi być > 0").max(16, "Pin musi być <= 16"),
-  name: z.string().min(2, "Nazwa musi mieć min. 2 znaki."),
+const formPinSchema = z.object({
+  name: z.string().min(1, "Nazwa jest wymagana."),
+  type: z.enum(['input', 'output']),
 });
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Nazwa musi mieć co najmniej 2 znaki." }),
   description: z.string().optional(),
-  inputs: z.array(pinSchema).optional(),
-  outputs: z.array(pinSchema).optional(),
+  pins: z.array(formPinSchema),
 });
 
 type TemplateFormProps = {
@@ -39,32 +45,49 @@ type TemplateFormProps = {
 
 const TemplateForm = ({ setModalOpen, editingTemplate }: TemplateFormProps) => {
   const { addTemplate, updateTemplate } = useAppContext();
+
+  const getDefaultValues = () => {
+    if (!editingTemplate) {
+      return { name: "", description: "", pins: [] };
+    }
+    const inputsAsFormPins = editingTemplate.inputs.map(p => ({ name: p.name, type: 'input' as const }));
+    const outputsAsFormPins = editingTemplate.outputs.map(p => ({ name: p.name, type: 'output' as const }));
+    return {
+      name: editingTemplate.name,
+      description: editingTemplate.description || "",
+      pins: [...inputsAsFormPins, ...outputsAsFormPins],
+    };
+  };
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: editingTemplate || {
-      name: "",
-      description: "",
-      inputs: [],
-      outputs: [],
-    },
+    defaultValues: getDefaultValues(),
   });
 
-  const { fields: inputFields, append: appendInput, remove: removeInput } = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
-    name: "inputs",
-  });
-
-  const { fields: outputFields, append: appendOutput, remove: removeOutput } = useFieldArray({
-    control: form.control,
-    name: "outputs",
+    name: "pins",
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
+    const finalInputs: TemplatePin[] = [];
+    const finalOutputs: TemplatePin[] = [];
+
+    values.pins.forEach(pin => {
+      if (pin.type === 'input') {
+        finalInputs.push({ name: pin.name, pinNumber: finalInputs.length + 1 });
+      } else {
+        finalOutputs.push({ name: pin.name, pinNumber: finalOutputs.length + 1 });
+      }
+    });
+
     const templateData = {
-      ...values,
-      inputs: values.inputs || [],
-      outputs: values.outputs || [],
+      name: values.name,
+      description: values.description,
+      inputs: finalInputs,
+      outputs: finalOutputs,
     };
+
     if (editingTemplate) {
       updateTemplate(editingTemplate.id, templateData);
       showSuccess("Szablon zaktualizowany pomyślnie");
@@ -86,7 +109,7 @@ const TemplateForm = ({ setModalOpen, editingTemplate }: TemplateFormProps) => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nazwa szablonu</FormLabel>
-                  <FormControl><Input placeholder="np. Standardowy mieszalnik" {...field} /></FormControl>
+                  <FormControl><Input placeholder="np. Dozowanie 3 składnikowe" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -103,74 +126,46 @@ const TemplateForm = ({ setModalOpen, editingTemplate }: TemplateFormProps) => {
               )}
             />
 
-            <div>
-              <h3 className="text-sm font-medium mb-2">Wejścia (Inputs)</h3>
-              <div className="space-y-3">
-                {inputFields.map((field, index) => (
-                  <div key={field.id} className="flex items-start gap-2">
+            <div className="relative mt-4">
+              <div className="absolute -top-3 left-4 bg-white px-2 text-sm font-medium text-gray-600 border border-b-0 rounded-t-md">Wejścia/Wyjścia</div>
+              <div className="border rounded-md p-4 pt-8 space-y-4">
+                {fields.map((field, index) => (
+                  <div key={field.id} className="grid grid-cols-[1fr_auto_auto] items-end gap-3">
                     <FormField
                       control={form.control}
-                      name={`inputs.${index}.pinNumber`}
+                      name={`pins.${index}.name`}
                       render={({ field }) => (
-                        <FormItem className="w-20">
-                          <FormControl><Input type="number" placeholder="Pin" {...field} /></FormControl>
+                        <FormItem>
+                          <FormLabel>Nazwa</FormLabel>
+                          <FormControl><Input placeholder={`np. Wyjście ${index + 1}`} {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                     <FormField
                       control={form.control}
-                      name={`inputs.${index}.name`}
+                      name={`pins.${index}.type`}
                       render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormControl><Input placeholder="Nazwa wejścia" {...field} /></FormControl>
+                        <FormItem>
+                          <FormLabel>Typ</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl><SelectTrigger className="w-[180px]"><SelectValue placeholder="Wybierz typ" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              <SelectItem value="output">Wyjście</SelectItem>
+                              <SelectItem value="input">Wejście</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removeInput(index)}>
+                    <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
-                <Button type="button" variant="outline" size="sm" onClick={() => appendInput({ pinNumber: inputFields.length + 1, name: "" })}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Dodaj wejście
-                </Button>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-medium mb-2">Wyjścia (Outputs)</h3>
-              <div className="space-y-3">
-                {outputFields.map((field, index) => (
-                  <div key={field.id} className="flex items-start gap-2">
-                    <FormField
-                      control={form.control}
-                      name={`outputs.${index}.pinNumber`}
-                      render={({ field }) => (
-                        <FormItem className="w-20">
-                          <FormControl><Input type="number" placeholder="Pin" {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`outputs.${index}.name`}
-                      render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormControl><Input placeholder="Nazwa wyjścia" {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removeOutput(index)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" size="sm" onClick={() => appendOutput({ pinNumber: outputFields.length + 1, name: "" })}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Dodaj wyjście
+                <Button type="button" className="w-full" onClick={() => append({ name: "", type: "output" })}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Dodaj
                 </Button>
               </div>
             </div>
