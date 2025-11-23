@@ -37,6 +37,7 @@ export interface IoDevice {
   description?: string;
   hostId: string;
   ipAddress: string;
+  model?: string;
 }
 
 export interface Printer {

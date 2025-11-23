@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PlusCircle, Edit, Trash2, Search } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -99,7 +99,9 @@ const DevicesPage = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nazwa</TableHead>
+                    <TableHead>Opis</TableHead>
                     <TableHead>Host</TableHead>
+                    <TableHead>Model</TableHead>
                     <TableHead>Adres IP</TableHead>
                     <TableHead className="text-right">Akcje</TableHead>
                   </TableRow>
@@ -108,7 +110,9 @@ const DevicesPage = () => {
                   {devices.map((device) => (
                     <TableRow key={device.id} className="hover:bg-gray-100 even:bg-gray-50/50">
                       <TableCell className="font-medium">{device.name}</TableCell>
+                      <TableCell>{device.description || "-"}</TableCell>
                       <TableCell>{getHostName(device.hostId)}</TableCell>
+                      <TableCell>{device.model || "-"}</TableCell>
                       <TableCell>{device.ipAddress}</TableCell>
                       <TableCell className="text-right space-x-1">
                         <Button variant="ghost" size="icon" className="text-success-green hover:bg-success-green/10 hover:text-success-green" onClick={() => handleEditClick(device)}>

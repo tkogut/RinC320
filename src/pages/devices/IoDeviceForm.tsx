@@ -30,6 +30,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   hostId: z.string({ required_error: "Host jest wymagany." }),
   ipAddress: z.string().ip({ version: "v4", message: "Nieprawidłowy adres IP." }),
+  model: z.string().optional(),
 });
 
 type IoDeviceFormProps = {
@@ -47,6 +48,7 @@ const IoDeviceForm = ({ setModalOpen, onAddDevice, onUpdateDevice, editingDevice
       name: "",
       description: "",
       ipAddress: "192.168.1.",
+      model: "",
     },
   });
 
@@ -110,6 +112,19 @@ const IoDeviceForm = ({ setModalOpen, onAddDevice, onUpdateDevice, editingDevice
                   )}
                 </SelectContent>
               </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="model"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Model</FormLabel>
+              <FormControl>
+                <Input placeholder="np. ioLogik E1212" {...field} />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
