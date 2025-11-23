@@ -52,6 +52,7 @@ export interface IoGroup {
   name: string;
   description?: string;
   deviceId: string; // Link to an IoDevice
+  templateId?: string; // Optional link to a template
 }
 
 export interface WeighingRecord {
@@ -61,6 +62,19 @@ export interface WeighingRecord {
   weight: number;
   unit: string;
   timestamp: number;
+}
+
+export interface TemplatePin {
+  pinNumber: number;
+  name: string;
+}
+
+export interface IoGroupTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  inputs: TemplatePin[];
+  outputs: TemplatePin[];
 }
 
 // Types for monitoring data

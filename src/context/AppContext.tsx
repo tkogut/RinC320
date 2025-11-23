@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
-import type { Host, ScaleConfig, IoDevice, Printer, WeighingRecord, IoGroup } from '@/types';
+import type { Host, ScaleConfig, IoDevice, Printer, WeighingRecord, IoGroup, IoGroupTemplate } from '@/types';
 
 interface AppContextType {
   hosts: Host[];
@@ -25,6 +25,10 @@ interface AppContextType {
   weighings: WeighingRecord[];
   addWeighing: (weighing: Omit<WeighingRecord, 'id' | 'timestamp'>) => void;
   deleteWeighing: (id: string) => void;
+  templates: IoGroupTemplate[];
+  addTemplate: (template: Omit<IoGroupTemplate, 'id'>) => void;
+  updateTemplate: (id: string, updatedTemplate: Omit<IoGroupTemplate, 'id'>) => void;
+  deleteTemplate: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -36,6 +40,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [groups, setGroups] = useState<IoGroup[]>([]);
   const [weighings, setWeighings] = useState<WeighingRecord[]>([]);
+  const [templates, setTemplates] = useState<IoGroupTemplate[]>([]);
 
   const addHost = (hostData: Omit<Host, 'id'>) => {
     const newHost: Host = { id: crypto.randomUUID(), ...hostData };
@@ -115,6 +120,19 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setWeighings(prev => prev.filter(weighing => weighing.id !== id));
   };
 
+  const addTemplate = (templateData: Omit<IoGroupTemplate, 'id'>) => {
+    const newTemplate: IoGroupTemplate = { id: crypto.randomUUID(), ...templateData };
+    setTemplates(prev => [...prev, newTemplate]);
+  };
+
+  const updateTemplate = (id: string, updatedTemplateData: Omit<IoGroupTemplate, 'id'>) => {
+    setTemplates(prev => prev.map(template => template.id === id ? { id, ...updatedTemplateData } : template));
+  };
+
+  const deleteTemplate = (id: string) => {
+    setTemplates(prev => prev.filter(template => template.id !== id));
+  };
+
   return (
     <AppContext.Provider value={{ 
       hosts, addHost, updateHost, deleteHost, 
@@ -122,7 +140,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       devices, addDevice, updateDevice, deleteDevice,
       printers, addPrinter, updatePrinter, deletePrinter,
       groups, addGroup, updateGroup, deleteGroup,
-      weighings, addWeighing, deleteWeighing
+      weighings, addWeighing, deleteWeighing,
+      templates, addTemplate, updateTemplate, deleteTemplate
     }}>
       {children}
     </AppContext.Provider>
