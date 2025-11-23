@@ -24,30 +24,17 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { showSuccess } from "@/utils/toast";
-
-// Mock data for dropdowns
-const mockGroups = ["Grupa A", "Grupa B", "Grupa C"];
-const mockHosts = ["Host 1", "Test Host"];
-const mockDepartments = ["Produkcja", "Magazyn"];
-const mockPrinters = ["Drukarka Zebra 1", "Drukarka Etykiet"];
-const mockModels = ["Rinstrum C320", "Generic ASCII"];
+import { useAppContext } from "@/context/AppContext";
+import type { Protocol } from "@/types";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Nazwa musi mieć co najmniej 2 znaki." }),
-  groups: z.array(z.string()).optional(),
   description: z.string().optional(),
-  host: z.string().optional(),
-  department: z.string().optional(),
-  printer: z.string().optional(),
-  groupMeasurements: z.boolean().default(false),
-  sendInterval: z.coerce.number().int().positive().default(10),
-  measurementUnit: z.string().default("Kilogramy"),
+  hostId: z.string({ required_error: "Musisz wybrać hosta." }),
+  protocol: z.enum(["rinstrum_c320", "generic_ascii"]),
+  isEnabled: z.boolean().default(true),
   model: z.string().optional(),
   measurementRegex: z.string().optional(),
-  communicationMode: z.string().default("Pomiary wysyłane z wagi"),
-  connectionType: z.string().default("Ethernet"),
-  ipAddress: z.string().ip({ version: "v4", message: "Nieprawidłowy adres IP." }).default("192.168.127.200"),
-  port: z.coerce.number().int().min(1).max(65535).default(4002),
 });
 
 type ScaleFormProps = {
@@ -55,24 +42,20 @@ type ScaleFormProps = {
 };
 
 const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
+  const { hosts, addConfiguration } = useAppContext();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       description: "",
-      groupMeasurements: false,
-      sendInterval: 10,
-      measurementUnit: "Kilogramy",
-      communicationMode: "Pomiary wysyłane z wagi",
-      connectionType: "Ethernet",
-      ipAddress: "192.168.127.200",
-      port: 4002,
+      protocol: "rinstrum_c320",
+      isEnabled: true,
     },
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log("Scale Form submitted:", values);
-    showSuccess("Waga zapisana (symulacja)");
+    addConfiguration(values);
+    showSuccess("Konfiguracja wagi zapisana");
     setModalOpen(false);
   }
 
@@ -92,17 +75,6 @@ const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
                 </FormItem>
               )}
             />
-            {/* Multi-select placeholder */}
-            <FormItem>
-              <FormLabel>Grupy</FormLabel>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="Wybierz grupy" /></SelectTrigger>
-                <SelectContent>
-                  {mockGroups.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <FormDescription>Funkcjonalność multi-select w budowie.</FormDescription>
-            </FormItem>
             <FormField
               control={form.control}
               name="description"
@@ -116,79 +88,37 @@ const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
             />
             <FormField
               control={form.control}
-              name="host"
+              name="hostId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Host</FormLabel>
+                  <FormLabel>Host (Konwerter)</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Wybierz" /></SelectTrigger></FormControl>
-                    <SelectContent>{mockHosts.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Wybierz hosta" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {hosts.length > 0 ? (
+                        hosts.map(h => <SelectItem key={h.id} value={h.id}>{h.name} ({h.ipAddress}:{h.port})</SelectItem>)
+                      ) : (
+                        <SelectItem value="disabled" disabled>Brak dostępnych hostów</SelectItem>
+                      )}
+                    </SelectContent>
                   </Select>
+                  <FormDescription>Wybierz konwerter, z którym połączy się waga.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <FormField
               control={form.control}
-              name="department"
+              name="protocol"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Oddział</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Wybierz" /></SelectTrigger></FormControl>
-                    <SelectContent>{mockDepartments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="printer"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Drukarka</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Wybierz" /></SelectTrigger></FormControl>
-                    <SelectContent>{mockPrinters.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="groupMeasurements"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center space-x-3 space-y-0 pt-2">
-                  <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                  <FormLabel>Grupuj wysyłane pomiary</FormLabel>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="sendInterval"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Interwał wysyłania pomiarów</FormLabel>
-                  <div className="flex items-center gap-2">
-                    <FormControl><Input type="number" {...field} /></FormControl>
-                    <span className="text-sm text-gray-600">w sekundach</span>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="measurementUnit"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Jednostka pomiaru</FormLabel>
+                  <FormLabel>Protokół</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent><SelectItem value="Kilogramy">Kilogramy</SelectItem><SelectItem value="Gramy">Gramy</SelectItem></SelectContent>
+                    <SelectContent>
+                      <SelectItem value="rinstrum_c320">Rinstrum C320</SelectItem>
+                      <SelectItem value="generic_ascii">Generic ASCII</SelectItem>
+                    </SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
@@ -200,10 +130,7 @@ const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Model</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Wybierz" /></SelectTrigger></FormControl>
-                    <SelectContent>{mockModels.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                  </Select>
+                  <FormControl><Input placeholder="np. Rinstrum C320" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -214,58 +141,18 @@ const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Regex dla pomiaru</FormLabel>
-                  <FormControl><Input placeholder="Opcjonalny regex" {...field} /></FormControl>
+                  <FormControl><Input placeholder="Opcjonalny regex do wyciągania wagi" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <FormField
+             <FormField
               control={form.control}
-              name="communicationMode"
+              name="isEnabled"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tryb komunikacji</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent><SelectItem value="Pomiary wysyłane z wagi">Pomiary wysyłane z wagi</SelectItem><SelectItem value="Pomiary odpytywane">Pomiary odpytywane</SelectItem></SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="connectionType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Typ połączenia</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent><SelectItem value="Ethernet">Ethernet</SelectItem><SelectItem value="Serial">Serial</SelectItem></SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="ipAddress"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Adres IP</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="port"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Port</FormLabel>
-                  <FormControl><Input type="number" {...field} /></FormControl>
-                  <FormMessage />
+                <FormItem className="flex flex-row items-center space-x-3 space-y-0 pt-2">
+                  <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                  <FormLabel>Konfiguracja włączona</FormLabel>
                 </FormItem>
               )}
             />

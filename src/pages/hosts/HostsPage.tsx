@@ -4,21 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PlusCircle, Edit, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import HostForm from "./HostForm";
-import type { Host } from "@/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { useAppContext } from "@/context/AppContext";
 
 const HostsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [hosts, setHosts] = useState<Host[]>([]);
-
-  const handleAddHost = (hostData: Omit<Host, "id">) => {
-    const newHost: Host = {
-      id: crypto.randomUUID(),
-      ...hostData,
-    };
-    setHosts(prevHosts => [...prevHosts, newHost]);
-  };
+  const { hosts, addHost } = useAppContext();
 
   return (
     <div>
@@ -43,7 +35,7 @@ const HostsPage = () => {
                 Wprowadź dane nowego hosta.
               </DialogDescription>
             </DialogHeader>
-            <HostForm setModalOpen={setIsModalOpen} onAddHost={handleAddHost} />
+            <HostForm setModalOpen={setIsModalOpen} onAddHost={addHost} />
           </DialogContent>
         </Dialog>
       </header>
@@ -58,7 +50,7 @@ const HostsPage = () => {
           <CardContent>
             {hosts.length === 0 ? (
               <div className="p-8 text-center text-gray-500 border-2 border-dashed rounded-lg">
-                <p>Brak zdefiniowanych hostów.</p>
+                <p>Brak zdefiniowanych hostów. Najpierw dodaj hosta.</p>
               </div>
             ) : (
               <Table>

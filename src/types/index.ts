@@ -4,20 +4,14 @@ export type ConnectionType = "tcp" | "serial";
 export type Protocol = "rinstrum_c320" | "generic_ascii";
 
 export interface ScaleConfig {
-  id: string; // e.g., UUID
+  id: string;
   name: string;
-  connectionType: ConnectionType;
-  // For TCP: "192.168.1.100:3000"
-  // For Serial: "COM1"
-  address: string;
-  // For Serial port specific settings
-  baudRate?: number;
-  dataBits?: 5 | 6 | 7 | 8;
-  stopBits?: 1 | 2;
-  parity?: "none" | "odd" | "even";
-
+  description?: string;
+  hostId: string; // Link to a Host
   protocol: Protocol;
   isEnabled: boolean;
+  model?: string;
+  measurementRegex?: string;
 }
 
 export interface Host {

@@ -13,6 +13,7 @@ import DevicesPage from "./pages/devices/DevicesPage";
 import HostsPage from "./pages/hosts/HostsPage";
 import GroupsPage from "./pages/groups/GroupsPage";
 import TemplatesPage from "./pages/templates/TemplatesPage";
+import { AppProvider } from "./context/AppContext";
 
 const queryClient = new QueryClient();
 
@@ -37,9 +38,11 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <MainLayout>
-          <AppRoutes />
-        </MainLayout>
+        <AppProvider>
+          <MainLayout>
+            <AppRoutes />
+          </MainLayout>
+        </AppProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
