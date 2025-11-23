@@ -18,6 +18,7 @@ import NotFound from "./pages/NotFound";
 import PrintersPage from "./pages/printers/PrintersPage";
 import IndicationsPage from "./pages/indications/IndicationsPage";
 import WeighingListPage from "./pages/weighing-list/WeighingListPage";
+import PinsPage from "./pages/pins/PinsPage";
 
 const queryClient = new QueryClient();
 
@@ -47,7 +48,7 @@ const App = () => (
               {/* Other top-level items */}
               <Route path="/scales-indications" element={<IndicationsPage />} />
               <Route path="/weighing-list" element={<WeighingListPage />} />
-              <Route path="/pins" element={<ComingSoonPage />} />
+              <Route path="/pins" element={<PinsPage />} />
 
               {/* Dosing Category */}
               <Route path="/order" element={<ComingSoonPage />} />
