@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { PlusCircle, Edit, Trash2, Search, Layers } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Search, Layers, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -19,12 +19,13 @@ import { useAppContext } from "@/context/AppContext";
 import { Input } from "@/components/ui/input";
 import type { IoGroupTemplate } from "@/types";
 import { showSuccess } from "@/utils/toast";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 const TemplatesPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [templateToEdit, setTemplateToEdit] = useState<IoGroupTemplate | null>(null);
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
-  const { templates, deleteTemplate } = useAppContext();
+  const { templates, deleteTemplate, groups } = useAppContext(); // Get groups to check template usage
 
   const handleAddClick = () => {
     setTemplateToEdit(null);
@@ -44,6 +45,14 @@ const TemplatesPage = () => {
     }
   };
 
+  const handleGenerateClick = () => {
+    showSuccess("Funkcja generowania szablonu zostanie wkrótce zaimplementowana!");
+  };
+
+  const isTemplateUsed = (templateId: string) => {
+    return groups.some(group => group.templateId === templateId);
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex items-center justify-between">
@@ -60,6 +69,10 @@ const TemplatesPage = () => {
           <Button onClick={handleAddClick}>
             <PlusCircle className="mr-2 h-4 w-4" />
             Dodaj szablon
+          </Button>
+          <Button onClick={handleGenerateClick} variant="secondary">
+            <Sparkles className="mr-2 h-4 w-4" />
+            Wygeneruj
           </Button>
         </div>
       </header>
@@ -80,6 +93,7 @@ const TemplatesPage = () => {
                     <TableHead>Nazwa szablonu</TableHead>
                     <TableHead>Wejścia</TableHead>
                     <TableHead>Wyjścia</TableHead>
+                    <TableHead>Użyty</TableHead> {/* New column */}
                     <TableHead className="text-right">Akcje</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -89,6 +103,9 @@ const TemplatesPage = () => {
                       <TableCell className="font-medium">{template.name}</TableCell>
                       <TableCell>{template.inputs.length}</TableCell>
                       <TableCell>{template.outputs.length}</TableCell>
+                      <TableCell>
+                        <StatusBadge isActive={isTemplateUsed(template.id)} />
+                      </TableCell>
                       <TableCell className="text-right space-x-1">
                         <Button variant="ghost" size="icon" onClick={() => handleEditClick(template)} title="Edytuj">
                           <Edit className="h-4 w-4" />
