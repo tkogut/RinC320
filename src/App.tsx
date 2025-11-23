@@ -30,7 +30,7 @@ const App = () => (
         <AppProvider>
           <MainLayout>
             <Routes>
-              <Route path="/" element={<Navigate to="/scales" replace />} />
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               
               {/* Scales Category */}

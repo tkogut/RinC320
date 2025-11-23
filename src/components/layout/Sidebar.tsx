@@ -6,6 +6,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const navigation = [
+  { name: "Dashboard", href: "/dashboard", icon: BarChart2 },
   { name: "Wskazania wag", href: "/scales-indications", icon: Scale },
   { name: "Lista ważeń", href: "/weighing-list", icon: List },
   { name: "Sterowanie I/O", href: "/pins", icon: ToggleRight },
