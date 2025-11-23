@@ -8,12 +8,13 @@ import LogsPanel from "@/components/LogsPanel";
 import CommandPanel from "@/components/CommandPanel";
 import HealthCheck from "@/components/HealthCheck";
 import { showSuccess } from "@/utils/toast";
-import type { Reading, LogEntry, CmdEntry } from "@/types";
-import { Play, Square } from "lucide-react";
+import type { Reading, LogEntry, CmdEntry, ScaleConfig } from "@/types";
+import { Play, Square, Save } from "lucide-react";
 import type { ProtocolCommands } from "@/config/protocols";
+import { useAppContext } from "@/context/AppContext";
 
 type MonitorViewProps = {
-  scaleName: string;
+  scaleConfig: ScaleConfig;
   weight: number | null;
   unit: string;
   status: string;
@@ -34,7 +35,7 @@ type MonitorViewProps = {
 };
 
 const MonitorView: React.FC<MonitorViewProps> = ({
-  scaleName,
+  scaleConfig,
   weight,
   unit,
   status,
@@ -53,10 +54,24 @@ const MonitorView: React.FC<MonitorViewProps> = ({
   onStartPolling,
   onStopPolling,
 }) => {
+  const { addWeighing } = useAppContext();
+
+  const handleSaveWeighing = () => {
+    if (weight !== null) {
+      addWeighing({
+        scaleId: scaleConfig.id,
+        scaleName: scaleConfig.name,
+        weight: weight,
+        unit: unit,
+      });
+      showSuccess(`Zapisano ważenie: ${weight.toFixed(2)} ${unit}`);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <header className="mb-6">
-        <h1 className="text-4xl font-bold mb-2">Monitor Wagi: {scaleName}</h1>
+        <h1 className="text-4xl font-bold mb-2">Monitor Wagi: {scaleConfig.name}</h1>
         <p className="text-gray-600">
           Odczyty na żywo i narzędzia diagnostyczne.
         </p>
@@ -94,6 +109,10 @@ const MonitorView: React.FC<MonitorViewProps> = ({
                 <Button onClick={() => commands && onSendCommand(commands.tare)} disabled={!commands}>Taruj</Button>
                 <Button onClick={() => commands && onSendCommand(commands.zero)} disabled={!commands}>Zeruj</Button>
                 <Button variant="secondary" onClick={() => commands && onSendCommand(commands.read)} disabled={!commands}>Odczyt jednorazowy</Button>
+                <Button variant="outline" onClick={handleSaveWeighing} disabled={weight === null}>
+                  <Save className="mr-2 h-4 w-4" />
+                  Zapisz ważenie
+                </Button>
               </div>
             </div>
 

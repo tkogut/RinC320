@@ -46,6 +46,15 @@ export interface Printer {
   hostId: string;
 }
 
+export interface WeighingRecord {
+  id: string;
+  scaleId: string;
+  scaleName: string;
+  weight: number;
+  unit: string;
+  timestamp: number;
+}
+
 // Types for monitoring data
 export type Reading = { ts: number; weight: number | null };
 

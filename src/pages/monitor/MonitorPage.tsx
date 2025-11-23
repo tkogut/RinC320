@@ -34,7 +34,7 @@ const MonitorPage = () => {
   return (
     <div className="min-h-screen p-6 bg-gray-50">
       <MonitorView
-        scaleName={config.name}
+        scaleConfig={config}
         weight={weight}
         unit={unit}
         status={status}

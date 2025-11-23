@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
-import type { Host, ScaleConfig, IoDevice, Printer } from '@/types';
+import type { Host, ScaleConfig, IoDevice, Printer, WeighingRecord } from '@/types';
 
 interface AppContextType {
   hosts: Host[];
@@ -18,6 +18,9 @@ interface AppContextType {
   addPrinter: (printer: Omit<Printer, 'id'>) => void;
   updatePrinter: (id: string, updatedPrinter: Omit<Printer, 'id'>) => void;
   deletePrinter: (id: string) => void;
+  weighings: WeighingRecord[];
+  addWeighing: (weighing: Omit<WeighingRecord, 'id' | 'timestamp'>) => void;
+  deleteWeighing: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -27,6 +30,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [configurations, setConfigurations] = useState<ScaleConfig[]>([]);
   const [devices, setDevices] = useState<IoDevice[]>([]);
   const [printers, setPrinters] = useState<Printer[]>([]);
+  const [weighings, setWeighings] = useState<WeighingRecord[]>([]);
 
   const addHost = (hostData: Omit<Host, 'id'>) => {
     const newHost: Host = { id: crypto.randomUUID(), ...hostData };
@@ -80,12 +84,26 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setPrinters(prev => prev.filter(printer => printer.id !== id));
   };
 
+  const addWeighing = (weighingData: Omit<WeighingRecord, 'id' | 'timestamp'>) => {
+    const newWeighing: WeighingRecord = { 
+      id: crypto.randomUUID(), 
+      timestamp: Date.now(),
+      ...weighingData 
+    };
+    setWeighings(prev => [newWeighing, ...prev]);
+  };
+
+  const deleteWeighing = (id: string) => {
+    setWeighings(prev => prev.filter(weighing => weighing.id !== id));
+  };
+
   return (
     <AppContext.Provider value={{ 
       hosts, addHost, updateHost, deleteHost, 
       configurations, addConfiguration, updateConfiguration, deleteConfiguration, 
       devices, addDevice, updateDevice, deleteDevice,
-      printers, addPrinter, updatePrinter, deletePrinter
+      printers, addPrinter, updatePrinter, deletePrinter,
+      weighings, addWeighing, deleteWeighing
     }}>
       {children}
     </AppContext.Provider>
