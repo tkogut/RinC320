@@ -12,6 +12,8 @@ interface AppContextType {
   deleteConfiguration: (id: string) => void;
   devices: IoDevice[];
   addDevice: (device: Omit<IoDevice, 'id'>) => void;
+  updateDevice: (id: string, updatedDevice: Omit<IoDevice, 'id'>) => void;
+  deleteDevice: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -69,8 +71,24 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setDevices(prev => [...prev, newDevice]);
   };
 
+  const updateDevice = (id: string, updatedDeviceData: Omit<IoDevice, 'id'>) => {
+    setDevices(prev =>
+      prev.map(device =>
+        device.id === id ? { id, ...updatedDeviceData } : device
+      )
+    );
+  };
+
+  const deleteDevice = (id: string) => {
+    setDevices(prev => prev.filter(device => device.id !== id));
+  };
+
   return (
-    <AppContext.Provider value={{ hosts, addHost, updateHost, deleteHost, configurations, addConfiguration, updateConfiguration, deleteConfiguration, devices, addDevice }}>
+    <AppContext.Provider value={{ 
+      hosts, addHost, updateHost, deleteHost, 
+      configurations, addConfiguration, updateConfiguration, deleteConfiguration, 
+      devices, addDevice, updateDevice, deleteDevice 
+    }}>
       {children}
     </AppContext.Provider>
   );

@@ -2,19 +2,51 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PlusCircle, Edit, Trash2, Search } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import IoDeviceForm from "./IoDeviceForm";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAppContext } from "@/context/AppContext";
 import { Input } from "@/components/ui/input";
+import type { IoDevice } from "@/types";
+import { showSuccess } from "@/utils/toast";
 
 const DevicesPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { devices, addDevice, hosts } = useAppContext();
+  const [deviceToEdit, setDeviceToEdit] = useState<IoDevice | null>(null);
+  const [deviceToDelete, setDeviceToDelete] = useState<string | null>(null);
+  const { devices, addDevice, updateDevice, deleteDevice, hosts } = useAppContext();
 
   const getHostName = (hostId: string) => {
     const host = hosts.find(h => h.id === hostId);
     return host ? host.name : "Nieznany host";
+  };
+
+  const handleAddClick = () => {
+    setDeviceToEdit(null);
+    setIsModalOpen(true);
+  };
+
+  const handleEditClick = (device: IoDevice) => {
+    setDeviceToEdit(device);
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = () => {
+    if (deviceToDelete) {
+      deleteDevice(deviceToDelete);
+      showSuccess("Urządzenie I/O zostało usunięte.");
+      setDeviceToDelete(null);
+    }
   };
 
   return (
@@ -32,19 +64,24 @@ const DevicesPage = () => {
           </div>
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={handleAddClick}>
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Dodaj urządzenie
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Szczegóły urządzenia</DialogTitle>
+                <DialogTitle>{deviceToEdit ? "Edytuj urządzenie" : "Szczegóły urządzenia"}</DialogTitle>
                 <DialogDescription>
-                  Wprowadź dane nowego urządzenia I/O.
+                  {deviceToEdit ? "Zmień dane urządzenia I/O." : "Wprowadź dane nowego urządzenia I/O."}
                 </DialogDescription>
               </DialogHeader>
-              <IoDeviceForm setModalOpen={setIsModalOpen} onAddDevice={addDevice} />
+              <IoDeviceForm
+                setModalOpen={setIsModalOpen}
+                onAddDevice={addDevice}
+                onUpdateDevice={updateDevice}
+                editingDevice={deviceToEdit}
+              />
             </DialogContent>
           </Dialog>
         </div>
@@ -74,10 +111,10 @@ const DevicesPage = () => {
                       <TableCell>{getHostName(device.hostId)}</TableCell>
                       <TableCell>{device.ipAddress}</TableCell>
                       <TableCell className="text-right space-x-1">
-                        <Button variant="ghost" size="icon" className="text-success-green hover:bg-success-green/10 hover:text-success-green">
+                        <Button variant="ghost" size="icon" className="text-success-green hover:bg-success-green/10 hover:text-success-green" onClick={() => handleEditClick(device)}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="text-danger-red hover:bg-danger-red/10 hover:text-danger-red">
+                        <Button variant="ghost" size="icon" className="text-danger-red hover:bg-danger-red/10 hover:text-danger-red" onClick={() => setDeviceToDelete(device.id)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -89,6 +126,21 @@ const DevicesPage = () => {
           </CardContent>
         </Card>
       </main>
+
+      <AlertDialog open={!!deviceToDelete} onOpenChange={(open) => !open && setDeviceToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Czy na pewno chcesz usunąć?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tej operacji nie można cofnąć. Spowoduje to trwałe usunięcie urządzenia I/O.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeviceToDelete(null)}>Anuluj</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Usuń</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

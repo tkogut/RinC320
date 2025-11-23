@@ -35,13 +35,15 @@ const formSchema = z.object({
 type IoDeviceFormProps = {
   setModalOpen: (isOpen: boolean) => void;
   onAddDevice: (deviceData: Omit<IoDevice, "id">) => void;
+  onUpdateDevice: (id: string, deviceData: Omit<IoDevice, "id">) => void;
+  editingDevice?: IoDevice | null;
 };
 
-const IoDeviceForm = ({ setModalOpen, onAddDevice }: IoDeviceFormProps) => {
+const IoDeviceForm = ({ setModalOpen, onAddDevice, onUpdateDevice, editingDevice }: IoDeviceFormProps) => {
   const { hosts } = useAppContext();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
+    defaultValues: editingDevice || {
       name: "",
       description: "",
       ipAddress: "192.168.1.",
@@ -49,8 +51,13 @@ const IoDeviceForm = ({ setModalOpen, onAddDevice }: IoDeviceFormProps) => {
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    onAddDevice(values);
-    showSuccess("Urządzenie I/O dodane pomyślnie");
+    if (editingDevice) {
+      onUpdateDevice(editingDevice.id, values);
+      showSuccess("Urządzenie I/O zaktualizowane pomyślnie");
+    } else {
+      onAddDevice(values);
+      showSuccess("Urządzenie I/O dodane pomyślnie");
+    }
     setModalOpen(false);
   }
 
