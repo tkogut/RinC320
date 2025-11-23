@@ -77,8 +77,7 @@ const TemplatesPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nazwa</TableHead>
-                    <TableHead>Opis</TableHead>
+                    <TableHead>Nazwa szablonu</TableHead>
                     <TableHead>Wejścia</TableHead>
                     <TableHead>Wyjścia</TableHead>
                     <TableHead className="text-right">Akcje</TableHead>
@@ -88,7 +87,6 @@ const TemplatesPage = () => {
                   {templates.map((template) => (
                     <TableRow key={template.id}>
                       <TableCell className="font-medium">{template.name}</TableCell>
-                      <TableCell>{template.description || "-"}</TableCell>
                       <TableCell>{template.inputs.length}</TableCell>
                       <TableCell>{template.outputs.length}</TableCell>
                       <TableCell className="text-right space-x-1">
