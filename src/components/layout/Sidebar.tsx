@@ -25,19 +25,6 @@ const navigation = [
     ],
   },
   { name: "Wagi", type: "category" },
-  { name: "Hakowa", children: [] },
-  { name: "Platforma", children: [] },
-  {
-    name: "Pojemnik",
-    children: [
-      { name: "Wykres wagi", href: "/scale-chart/some-uuid", icon: BarChart2 },
-      { name: "Automatyczne ważenia", href: "/auto-weighings/some-uuid", icon: Settings },
-      { name: "Serie ważeń", children: [] },
-      { name: "Zmiany stanów", href: "/changes-of-states/some-uuid", icon: History },
-    ],
-  },
-  { name: "Silos", children: [] },
-  { name: "Zbiornik", children: [] },
   {
     name: "Konfiguracja",
     icon: Settings,
