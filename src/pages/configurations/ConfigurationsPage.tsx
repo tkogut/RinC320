@@ -1,23 +1,42 @@
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { PlusCircle, Edit, Trash2, Search, ArrowUpDown } from "lucide-react";
+import { Edit, Trash2, Search, ArrowUpDown } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import ScaleForm from "./ScaleForm";
 import { useAppContext } from "@/context/AppContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import type { ConnectionType } from "@/types";
+import { showSuccess } from "@/utils/toast";
 
 const ConfigurationsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { configurations, hosts } = useAppContext();
+  const [configToDelete, setConfigToDelete] = useState<string | null>(null);
+  const { configurations, hosts, deleteConfiguration } = useAppContext();
 
   const displayConnectionType = (type?: ConnectionType) => {
     if (type === 'tcp') return 'ETHERNET';
     if (type === 'serial') return 'SERIAL';
     return '-';
+  };
+
+  const handleDelete = () => {
+    if (configToDelete) {
+      deleteConfiguration(configToDelete);
+      showSuccess("Konfiguracja wagi została usunięta.");
+      setConfigToDelete(null);
+    }
   };
 
   return (
@@ -93,7 +112,11 @@ const ConfigurationsPage = () => {
                           <Button size="icon" className="h-8 w-8 bg-success-green hover:bg-success-green/90">
                             <Edit className="h-4 w-4 text-white" />
                           </Button>
-                          <Button size="icon" className="h-8 w-8 bg-green-400 hover:bg-green-400/90">
+                          <Button
+                            size="icon"
+                            className="h-8 w-8 bg-green-400 hover:bg-green-400/90"
+                            onClick={() => setConfigToDelete(config.id)}
+                          >
                             <Trash2 className="h-4 w-4 text-white" />
                           </Button>
                         </TableCell>
@@ -106,6 +129,23 @@ const ConfigurationsPage = () => {
           </CardContent>
         </Card>
       </main>
+
+      <AlertDialog open={!!configToDelete} onOpenChange={(isOpen) => !isOpen && setConfigToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Czy na pewno chcesz usunąć?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tej operacji nie można cofnąć. Spowoduje to trwałe usunięcie konfiguracji wagi.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfigToDelete(null)}>Anuluj</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-danger-red hover:bg-danger-red/90">
+              Usuń
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
