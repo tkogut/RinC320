@@ -29,6 +29,14 @@ export interface Host {
   isActive: boolean;
 }
 
+export interface IoDevice {
+  id: string;
+  name: string;
+  description?: string;
+  host: string;
+  ipAddress: string;
+}
+
 // Types for monitoring data
 export type Reading = { ts: number; weight: number | null };
 

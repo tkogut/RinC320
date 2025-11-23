@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { showSuccess } from "@/utils/toast";
+import type { IoDevice } from "@/types";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Nazwa musi mieć co najmniej 2 znaki." }),
@@ -34,9 +35,10 @@ const formSchema = z.object({
 
 type IoDeviceFormProps = {
   setModalOpen: (isOpen: boolean) => void;
+  onAddDevice: (deviceData: Omit<IoDevice, "id">) => void;
 };
 
-const IoDeviceForm = ({ setModalOpen }: IoDeviceFormProps) => {
+const IoDeviceForm = ({ setModalOpen, onAddDevice }: IoDeviceFormProps) => {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -46,8 +48,8 @@ const IoDeviceForm = ({ setModalOpen }: IoDeviceFormProps) => {
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log("Form submitted:", values);
-    showSuccess("Urządzenie I/O zapisane (symulacja)");
+    onAddDevice(values);
+    showSuccess("Urządzenie I/O dodane pomyślnie");
     setModalOpen(false);
   }
 
