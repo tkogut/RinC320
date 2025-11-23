@@ -110,12 +110,12 @@ const SettingsPanel: React.FC<Props> = ({ wsUrl, onWsChange, bridgeUrl, onBridge
     } else {
       // when disabling, restore previously saved or default
       try {
-        const saved = localStorage.getItem(BRIDGE_STORAGE_KEY) || "http://localhost:8080/rincmd";
+        const saved = localStorage.getItem(BRIDGE_STORAGE_KEY) || "/api/scalecmd";
         setBridgeValue(saved);
         onBridgeChange(saved);
       } catch {
-        setBridgeValue("http://localhost:8080/rincmd");
-        onBridgeChange("http://localhost:8080/rincmd");
+        setBridgeValue("/api/scalecmd");
+        onBridgeChange("/api/scalecmd");
       }
     }
   };
