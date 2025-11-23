@@ -20,6 +20,15 @@ export interface ScaleConfig {
   isEnabled: boolean;
 }
 
+export interface Host {
+  id: string;
+  name: string;
+  description?: string;
+  ipAddress: string;
+  port: number;
+  isActive: boolean;
+}
+
 // Types for monitoring data
 export type Reading = { ts: number; weight: number | null };
 

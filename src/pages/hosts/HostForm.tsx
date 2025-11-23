@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { showSuccess } from "@/utils/toast";
+import type { Host } from "@/types";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Nazwa musi mieć co najmniej 2 znaki." }),
@@ -27,22 +28,24 @@ const formSchema = z.object({
 
 type HostFormProps = {
   setModalOpen: (isOpen: boolean) => void;
+  onAddHost: (hostData: Omit<Host, "id">) => void;
 };
 
-const HostForm = ({ setModalOpen }: HostFormProps) => {
+const HostForm = ({ setModalOpen, onAddHost }: HostFormProps) => {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       description: "",
       ipAddress: "192.168.1.",
+      port: 4001,
       isActive: true,
     },
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log("Host Form submitted:", values);
-    showSuccess("Host zapisany (symulacja)");
+    onAddHost(values);
+    showSuccess("Host dodany pomyślnie");
     setModalOpen(false);
   }
 
