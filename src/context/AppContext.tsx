@@ -4,6 +4,8 @@ import type { Host, ScaleConfig, IoDevice } from '@/types';
 interface AppContextType {
   hosts: Host[];
   addHost: (host: Omit<Host, 'id'>) => void;
+  updateHost: (id: string, updatedHost: Omit<Host, 'id'>) => void;
+  deleteHost: (id: string) => void;
   configurations: ScaleConfig[];
   addConfiguration: (config: Omit<ScaleConfig, 'id'>) => void;
   updateConfiguration: (id: string, updatedConfig: Omit<ScaleConfig, 'id'>) => void;
@@ -25,6 +27,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       ...hostData,
     };
     setHosts(prev => [...prev, newHost]);
+  };
+
+  const updateHost = (id: string, updatedHostData: Omit<Host, 'id'>) => {
+    setHosts(prev =>
+      prev.map(host =>
+        host.id === id ? { id, ...updatedHostData } : host
+      )
+    );
+  };
+
+  const deleteHost = (id: string) => {
+    setHosts(prev => prev.filter(host => host.id !== id));
   };
 
   const addConfiguration = (configData: Omit<ScaleConfig, 'id'>) => {
@@ -56,7 +70,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AppContext.Provider value={{ hosts, addHost, configurations, addConfiguration, updateConfiguration, deleteConfiguration, devices, addDevice }}>
+    <AppContext.Provider value={{ hosts, addHost, updateHost, deleteHost, configurations, addConfiguration, updateConfiguration, deleteConfiguration, devices, addDevice }}>
       {children}
     </AppContext.Provider>
   );

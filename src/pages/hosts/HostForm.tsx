@@ -30,12 +30,14 @@ const formSchema = z.object({
 type HostFormProps = {
   setModalOpen: (isOpen: boolean) => void;
   onAddHost: (hostData: Omit<Host, "id">) => void;
+  onUpdateHost: (id: string, hostData: Omit<Host, "id">) => void;
+  editingHost?: Host | null;
 };
 
-const HostForm = ({ setModalOpen, onAddHost }: HostFormProps) => {
+const HostForm = ({ setModalOpen, onAddHost, onUpdateHost, editingHost }: HostFormProps) => {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
+    defaultValues: editingHost || {
       name: "",
       description: "",
       ipAddress: "192.168.1.",
@@ -45,8 +47,13 @@ const HostForm = ({ setModalOpen, onAddHost }: HostFormProps) => {
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    onAddHost(values);
-    showSuccess("Host dodany pomyślnie");
+    if (editingHost) {
+      onUpdateHost(editingHost.id, values);
+      showSuccess("Host zaktualizowany pomyślnie");
+    } else {
+      onAddHost(values);
+      showSuccess("Host dodany pomyślnie");
+    }
     setModalOpen(false);
   }
 
