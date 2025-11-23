@@ -42,7 +42,7 @@ const HostsPage = () => {
             <CardDescription>
               Lista wszystkich zdefiniowanych hostów.
             </CardDescription>
-          </Header>
+          </CardHeader>
           <CardContent>
             <div className="p-8 text-center text-gray-500 border-2 border-dashed rounded-lg">
               <p>Brak zdefiniowanych hostów.</p>
