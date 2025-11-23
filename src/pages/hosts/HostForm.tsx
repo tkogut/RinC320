@@ -14,21 +14,15 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { showSuccess } from "@/utils/toast";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Nazwa musi mieć co najmniej 2 znaki." }),
   description: z.string().optional(),
-  department: z.string().optional(),
-  isActive: z.boolean().default(false),
+  ipAddress: z.string().ip({ version: "v4", message: "Nieprawidłowy adres IP." }),
+  port: z.coerce.number().int().min(1, "Port musi być większy od 0.").max(65535, "Port nie może być większy niż 65535."),
+  isActive: z.boolean().default(true),
 });
 
 type HostFormProps = {
@@ -41,8 +35,8 @@ const HostForm = ({ setModalOpen }: HostFormProps) => {
     defaultValues: {
       name: "",
       description: "",
-      department: undefined,
-      isActive: false,
+      ipAddress: "192.168.1.",
+      isActive: true,
     },
   });
 
@@ -62,7 +56,7 @@ const HostForm = ({ setModalOpen }: HostFormProps) => {
             <FormItem>
               <FormLabel>Nazwa</FormLabel>
               <FormControl>
-                <Input placeholder="np. Serwer Produkcyjny" {...field} />
+                <Input placeholder="np. MOXA NP-301 Magazyn" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -83,22 +77,26 @@ const HostForm = ({ setModalOpen }: HostFormProps) => {
         />
         <FormField
           control={form.control}
-          name="department"
+          name="ipAddress"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Oddział</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Wybierz" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="it">Dział IT</SelectItem>
-                  <SelectItem value="production">Produkcja</SelectItem>
-                  <SelectItem value="warehouse">Magazyn</SelectItem>
-                </SelectContent>
-              </Select>
+              <FormLabel>Adres IP</FormLabel>
+              <FormControl>
+                <Input placeholder="np. 192.168.1.10" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="port"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Port</FormLabel>
+              <FormControl>
+                <Input type="number" placeholder="np. 4001" {...field} />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
