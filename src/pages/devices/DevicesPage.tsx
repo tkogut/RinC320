@@ -4,19 +4,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PlusCircle, Edit, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import IoDeviceForm from "./IoDeviceForm";
-import type { IoDevice } from "@/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useAppContext } from "@/context/AppContext";
 
 const DevicesPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [devices, setDevices] = useState<IoDevice[]>([]);
+  const { devices, addDevice, hosts } = useAppContext();
 
-  const handleAddDevice = (deviceData: Omit<IoDevice, "id">) => {
-    const newDevice: IoDevice = {
-      id: crypto.randomUUID(),
-      ...deviceData,
-    };
-    setDevices(prevDevices => [...prevDevices, newDevice]);
+  const getHostName = (hostId: string) => {
+    const host = hosts.find(h => h.id === hostId);
+    return host ? host.name : "Nieznany host";
   };
 
   return (
@@ -42,7 +39,7 @@ const DevicesPage = () => {
                 Wprowadź dane nowego urządzenia I/O.
               </DialogDescription>
             </DialogHeader>
-            <IoDeviceForm setModalOpen={setIsModalOpen} onAddDevice={handleAddDevice} />
+            <IoDeviceForm setModalOpen={setIsModalOpen} onAddDevice={addDevice} />
           </DialogContent>
         </Dialog>
       </header>
@@ -74,7 +71,7 @@ const DevicesPage = () => {
                   {devices.map((device) => (
                     <TableRow key={device.id}>
                       <TableCell className="font-medium">{device.name}</TableCell>
-                      <TableCell>{device.host}</TableCell>
+                      <TableCell>{getHostName(device.hostId)}</TableCell>
                       <TableCell>{device.ipAddress}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="icon">

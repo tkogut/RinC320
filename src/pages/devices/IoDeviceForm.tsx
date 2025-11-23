@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -23,14 +22,13 @@ import {
 } from "@/components/ui/select";
 import { showSuccess } from "@/utils/toast";
 import type { IoDevice } from "@/types";
+import { useAppContext } from "@/context/AppContext";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Nazwa musi mieć co najmniej 2 znaki." }),
   description: z.string().optional(),
-  host: z.string({ required_error: "Host jest wymagany." }),
-  ipAddress: z.string().regex(/^192\.168\.\d{1,3}\.\d{1,3}$/, {
-    message: "Wymagany format to 192.168.x.x",
-  }),
+  hostId: z.string({ required_error: "Host jest wymagany." }),
+  ipAddress: z.string().ip({ version: "v4", message: "Nieprawidłowy adres IP." }),
 });
 
 type IoDeviceFormProps = {
@@ -39,11 +37,13 @@ type IoDeviceFormProps = {
 };
 
 const IoDeviceForm = ({ setModalOpen, onAddDevice }: IoDeviceFormProps) => {
+  const { hosts } = useAppContext();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       description: "",
+      ipAddress: "192.168.1.",
     },
   });
 
@@ -84,19 +84,22 @@ const IoDeviceForm = ({ setModalOpen, onAddDevice }: IoDeviceFormProps) => {
         />
         <FormField
           control={form.control}
-          name="host"
+          name="hostId"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Host</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Wybierz" />
+                    <SelectValue placeholder="Wybierz hosta" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="host1">Host 1</SelectItem>
-                  <SelectItem value="test">Test</SelectItem>
+                  {hosts.length > 0 ? (
+                    hosts.map(h => <SelectItem key={h.id} value={h.id}>{h.name} ({h.ipAddress})</SelectItem>)
+                  ) : (
+                    <SelectItem value="disabled" disabled>Brak dostępnych hostów</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
               <FormMessage />

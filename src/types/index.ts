@@ -27,7 +27,7 @@ export interface IoDevice {
   id: string;
   name: string;
   description?: string;
-  host: string;
+  hostId: string;
   ipAddress: string;
 }
 

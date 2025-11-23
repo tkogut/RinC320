@@ -1,11 +1,13 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
-import type { Host, ScaleConfig } from '@/types';
+import type { Host, ScaleConfig, IoDevice } from '@/types';
 
 interface AppContextType {
   hosts: Host[];
   addHost: (host: Omit<Host, 'id'>) => void;
   configurations: ScaleConfig[];
   addConfiguration: (config: Omit<ScaleConfig, 'id'>) => void;
+  devices: IoDevice[];
+  addDevice: (device: Omit<IoDevice, 'id'>) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -13,6 +15,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [hosts, setHosts] = useState<Host[]>([]);
   const [configurations, setConfigurations] = useState<ScaleConfig[]>([]);
+  const [devices, setDevices] = useState<IoDevice[]>([]);
 
   const addHost = (hostData: Omit<Host, 'id'>) => {
     const newHost: Host = {
@@ -30,8 +33,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setConfigurations(prev => [...prev, newConfig]);
   };
 
+  const addDevice = (deviceData: Omit<IoDevice, 'id'>) => {
+    const newDevice: IoDevice = {
+      id: crypto.randomUUID(),
+      ...deviceData,
+    };
+    setDevices(prev => [...prev, newDevice]);
+  };
+
   return (
-    <AppContext.Provider value={{ hosts, addHost, configurations, addConfiguration }}>
+    <AppContext.Provider value={{ hosts, addHost, configurations, addConfiguration, devices, addDevice }}>
       {children}
     </AppContext.Provider>
   );
