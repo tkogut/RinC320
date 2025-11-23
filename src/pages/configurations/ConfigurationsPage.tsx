@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Edit, Trash2, Search, ArrowUpDown } from "lucide-react";
 import { useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,12 +17,13 @@ import ScaleForm from "./ScaleForm";
 import { useAppContext } from "@/context/AppContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import type { ConnectionType } from "@/types";
+import type { ConnectionType, ScaleConfig } from "@/types";
 import { showSuccess } from "@/utils/toast";
 
 const ConfigurationsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [configToDelete, setConfigToDelete] = useState<string | null>(null);
+  const [configToEdit, setConfigToEdit] = useState<ScaleConfig | null>(null);
   const { configurations, hosts, deleteConfiguration } = useAppContext();
 
   const displayConnectionType = (type?: ConnectionType) => {
@@ -39,6 +40,16 @@ const ConfigurationsPage = () => {
     }
   };
 
+  const handleAddClick = () => {
+    setConfigToEdit(null);
+    setIsModalOpen(true);
+  };
+
+  const handleEditClick = (config: ScaleConfig) => {
+    setConfigToEdit(config);
+    setIsModalOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex items-center justify-between">
@@ -52,24 +63,9 @@ const ConfigurationsPage = () => {
               className="w-full rounded-lg bg-white pl-8 md:w-[200px] lg:w-[336px]"
             />
           </div>
-          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                + Dodaj
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] h-[90vh] flex flex-col">
-              <DialogHeader>
-                <DialogTitle>Szczegóły wagi</DialogTitle>
-                <DialogDescription>
-                  Wprowadź szczegóły konfiguracji dla nowej wagi.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex-grow overflow-hidden">
-                <ScaleForm setModalOpen={setIsModalOpen} />
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={handleAddClick}>
+            + Dodaj
+          </Button>
         </div>
       </header>
 
@@ -109,7 +105,7 @@ const ConfigurationsPage = () => {
                         <TableCell>{host ? host.ipAddress : "-"}</TableCell>
                         <TableCell>{host ? host.port : "-"}</TableCell>
                         <TableCell className="text-right space-x-2">
-                          <Button size="icon" className="h-8 w-8 bg-success-green hover:bg-success-green/90">
+                          <Button size="icon" className="h-8 w-8 bg-success-green hover:bg-success-green/90" onClick={() => handleEditClick(config)}>
                             <Edit className="h-4 w-4 text-white" />
                           </Button>
                           <Button
@@ -130,6 +126,20 @@ const ConfigurationsPage = () => {
         </Card>
       </main>
 
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="sm:max-w-[600px] h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{configToEdit ? "Edytuj wagę" : "Szczegóły wagi"}</DialogTitle>
+            <DialogDescription>
+              {configToEdit ? "Zmień dane konfiguracji." : "Wprowadź szczegóły konfiguracji dla nowej wagi."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-grow overflow-hidden">
+            <ScaleForm setModalOpen={setIsModalOpen} editingConfig={configToEdit} />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={!!configToDelete} onOpenChange={(isOpen) => !isOpen && setConfigToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -139,7 +149,7 @@ const ConfigurationsPage = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfigToDelete(null)}>Anuluj</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setConfigToDelete(null)}>Anuluj</Cancel>
             <AlertDialogAction onClick={handleDelete} className="bg-danger-red hover:bg-danger-red/90">
               Usuń
             </AlertDialogAction>

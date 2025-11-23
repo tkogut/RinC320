@@ -25,7 +25,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { showSuccess } from "@/utils/toast";
 import { useAppContext } from "@/context/AppContext";
-import type { Protocol } from "@/types";
+import type { ScaleConfig } from "@/types";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Nazwa musi mieć co najmniej 2 znaki." }),
@@ -46,13 +46,14 @@ const formSchema = z.object({
 
 type ScaleFormProps = {
   setModalOpen: (isOpen: boolean) => void;
+  editingConfig?: ScaleConfig | null;
 };
 
-const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
-  const { hosts, addConfiguration } = useAppContext();
+const ScaleForm = ({ setModalOpen, editingConfig }: ScaleFormProps) => {
+  const { hosts, addConfiguration, updateConfiguration } = useAppContext();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
+    defaultValues: editingConfig || {
       name: "",
       description: "",
       protocol: "rinstrum_c320",
@@ -65,8 +66,13 @@ const ScaleForm = ({ setModalOpen }: ScaleFormProps) => {
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    addConfiguration(values);
-    showSuccess("Konfiguracja wagi zapisana");
+    if (editingConfig) {
+      updateConfiguration(editingConfig.id, values);
+      showSuccess("Konfiguracja wagi zaktualizowana");
+    } else {
+      addConfiguration(values);
+      showSuccess("Konfiguracja wagi zapisana");
+    }
     setModalOpen(false);
   }
 
